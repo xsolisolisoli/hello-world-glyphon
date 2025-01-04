@@ -1,0 +1,26 @@
+[package]
+name = "hello-world-glyphon"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+glyphon = "0.7.0"
+wgpu = { version = "23", default-features = false, features = ["wgsl"] }
+etagere = "0.2.10"
+winit = "0.30.3"
+cosmic-text = "0.12"
+pollster = "0.4.0"
+lru = { version = "0.12.1", default-features = false }
+rustc-hash = "2.0"
+
+[dev-dependencies]
+glyphon = "0.7.0"
+wgpu = { version = "23", default-features = false, features = ["wgsl"] }
+winit = "0.30.3"
+resvg = { version = "0.44", default-features = false }
+pollster = "0.4.0"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "prepare"
+harness = false
