@@ -2,16 +2,22 @@ use glyphon::{
     Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache,
     TextArea, TextAtlas, TextBounds, TextRenderer, Viewport,
 };
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use wgpu::{
     CommandEncoderDescriptor, CompositeAlphaMode, DeviceDescriptor, Instance, InstanceDescriptor,
     LoadOp, MultisampleState, Operations, PresentMode, RenderPassColorAttachment,
     RenderPassDescriptor, RequestAdapterOptions, SurfaceConfiguration, TextureFormat,
     TextureUsages, TextureViewDescriptor,
 };
-use winit::{dpi::LogicalSize, event::WindowEvent, event_loop::EventLoop, window::Window};
+use winit::{dpi::LogicalSize, event::{KeyEvent, WindowEvent}, event_loop::EventLoop, keyboard::{KeyCode, PhysicalKey}, window::Window};
+use winit::event::{ElementState};
+use log::info;
+static INIT: Once = Once::new();
 
 fn main() {
+    INIT.call_once(|| {
+        env_logger::init();
+    });
     let event_loop = EventLoop::new().unwrap();
     event_loop
         .run_app(&mut Application {window_state: None})
@@ -29,6 +35,8 @@ struct WindowState {
     atlas: glyphon::TextAtlas,
     text_renderer: glyphon::TextRenderer,
     text_buffer: glyphon::Buffer,
+
+    chat_text: String,
 
     window: Arc<Window>,
 }
@@ -77,8 +85,8 @@ impl WindowState {
             Some(physical_height as f32)
         );
 
-
-        text_buffer.set_text(&mut font_system, "Hello world! 👋\nThis is rendered with 🦅 glyphon 🦁\nThe text below should be partially clipped.\na b c d e f g h i j k l m n o p q r s t u v w x y z", Attrs::new().family(Family::SansSerif), Shaping::Advanced); 
+        let mut chat_text = "Hello world! 👋\nThis is rendered with 🦅 glyphon 🦁\nThe text below should be partially clipped.\na b c d e f g h i j k l m n o p q r s t u v w x y z".to_string();
+        text_buffer.set_text(&mut font_system, &chat_text, Attrs::new().family(Family::SansSerif), Shaping::Advanced); 
         text_buffer.shape_until_scroll(&mut font_system, false);
 
         Self {
@@ -92,6 +100,8 @@ impl WindowState {
             atlas,
             text_renderer,
             text_buffer,
+            chat_text,
+
             window,
             }
         }
@@ -134,10 +144,32 @@ impl WindowState {
                 atlas,
                 text_renderer,
                 text_buffer,
+                chat_text,
                 ..
             } = state;
+            let chat_text = &mut state.chat_text;
 
             match event {
+                WindowEvent::KeyboardInput {
+                    event:
+                        KeyEvent {
+                            state: ElementState::Pressed,
+                            physical_key: PhysicalKey::Code(KeyCode::Enter),
+                            ..
+                        },
+                    ..
+                } => {
+                    info!("hi hi hi");
+                    *chat_text = format!("{}\n{}", "hi", chat_text);
+                    text_buffer.set_text(
+                        font_system,
+                        chat_text,
+                        Attrs::new().family(Family::SansSerif),
+                        Shaping::Advanced,
+                    );
+                    text_buffer.shape_until_scroll(font_system, false);
+                    window.request_redraw();
+                }
                 WindowEvent::Resized(size) => {
                     surface_config.width = size.width;
                     surface_config.height = size.height;
