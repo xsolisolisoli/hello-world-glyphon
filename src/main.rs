@@ -12,6 +12,7 @@ use wgpu::{
 use winit::{dpi::LogicalSize, event::{KeyEvent, WindowEvent}, event_loop::EventLoop, keyboard::{KeyCode, PhysicalKey}, window::Window};
 use winit::event::{ElementState};
 use log::info;
+mod console;
 static INIT: Once = Once::new();
 
 fn main() {
@@ -73,7 +74,7 @@ impl WindowState {
         let viewport = Viewport::new(&device, &cache);
         let mut atlas = TextAtlas::new(&device, &queue, &cache, swapchain_format);
         let text_renderer = 
-            TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
+        TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
         let mut text_buffer = Buffer::new(&mut font_system, Metrics::new(30.0, 42.0));
 
         let physical_width = (physical_size.width as f64 * scale_factor) as u32;
@@ -160,14 +161,7 @@ impl WindowState {
                     ..
                 } => {
                     info!("hi hi hi");
-                    *chat_text = format!("{}\n{}", "hi", chat_text);
-                    text_buffer.set_text(
-                        font_system,
-                        chat_text,
-                        Attrs::new().family(Family::SansSerif),
-                        Shaping::Advanced,
-                    );
-                    text_buffer.shape_until_scroll(font_system, false);
+                    console::write_to_console(text_buffer, font_system, chat_text, "hi");
                     window.request_redraw();
                 }
                 WindowEvent::Resized(size) => {
