@@ -820,6 +820,7 @@ dependencies = [
 name = "hello-world-glyphon"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "cosmic-text",
  "criterion",
  "env_logger",
