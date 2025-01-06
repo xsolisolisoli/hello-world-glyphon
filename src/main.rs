@@ -36,8 +36,8 @@ struct WindowState {
     atlas: glyphon::TextAtlas,
     text_renderer: glyphon::TextRenderer,
     text_buffer: glyphon::Buffer,
-
     chat_text: String,
+    render_pipeline: wgpu::RenderPipeline,
 
     window: Arc<Window>,
 }
@@ -55,7 +55,58 @@ impl WindowState {
             .request_device(&DeviceDescriptor::default(), None).await.unwrap();
         let surface = instance.create_surface(window.clone()).expect("Create Surface");
 
+        //Render Pipeline
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        });
+        let render_pipeline_layout =
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
         let swapchain_format = TextureFormat::Bgra8UnormSrgb;
+
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: swapchain_format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+    
+
         let surface_config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format: swapchain_format,
@@ -102,6 +153,7 @@ impl WindowState {
             text_renderer,
             text_buffer,
             chat_text,
+            render_pipeline,
 
             window,
             }
@@ -146,6 +198,7 @@ impl WindowState {
                 text_renderer,
                 text_buffer,
                 chat_text,
+                render_pipeline,
                 ..
             } = state;
             let chat_text = &mut state.chat_text;
@@ -217,6 +270,8 @@ impl WindowState {
                             occlusion_query_set: None,
                     });
                     text_renderer.render(&atlas, &viewport, &mut pass).unwrap();
+                    pass.set_pipeline(&render_pipeline);
+                    pass.draw(0..3,0..1);
                 }
                 queue.submit(Some(encoder.finish()));
                 frame.present();
