@@ -213,6 +213,7 @@ impl WindowState {
                         },
                     ..
                 } => {
+                    let inputMode = true;
                     info!("hi hi hi");
                     console::write_to_console(text_buffer, font_system, chat_text, "hi");
                     window.request_redraw();
