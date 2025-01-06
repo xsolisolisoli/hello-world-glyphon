@@ -203,12 +203,12 @@ impl WindowState {
                     let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor { label: None });
                     {
                         let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                            label: None,
+                            label: Some("Render pass"),
                             color_attachments: &[Some(RenderPassColorAttachment {
                                 view: &view,
                                 resolve_target: None,
                                 ops: Operations {
-                                    load: LoadOp::Clear(wgpu::Color::BLACK),
+                                    load: LoadOp::Clear(wgpu::Color::RED),
                                     store: wgpu::StoreOp::Store,
                                 },
                             })],
