@@ -67,7 +67,8 @@ struct WindowState {
     chat_text: String,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
-    num_vertices: u32,
+    num_indices: u32,
+    index_buffer: wgpu::Buffer,
     window: Arc<Window>,
 }
 
@@ -106,7 +107,15 @@ impl WindowState {
                 usage: wgpu::BufferUsages::VERTEX,
             }
         );
-        let num_vertices = VERTICES.len() as u32;
+
+        let index_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: bytemuck::cast_slice(INDICES),
+                usage: wgpu::BufferUsages::INDEX,
+            }
+        );
+        let num_indices = INDICES.len() as u32;
         //Render Pipeline
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -208,8 +217,9 @@ impl WindowState {
             text_buffer,
             chat_text,
             render_pipeline,
+            index_buffer,
             vertex_buffer,
-            num_vertices,
+            num_indices,
             window,
             }
         }
@@ -255,7 +265,8 @@ impl WindowState {
                 chat_text,
                 render_pipeline,
                 vertex_buffer,
-                num_vertices,
+                index_buffer,
+                num_indices,
                 ..
             } = state;
             let chat_text = &mut state.chat_text;
@@ -336,9 +347,14 @@ impl WindowState {
                             occlusion_query_set: None,
                     });
                     text_renderer.render(&atlas, &viewport, &mut pass).unwrap();
+                    // pass.set_pipeline(&render_pipeline);
+                    // pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    // pass.draw(0..*num_vertices, 0..1);
+
                     pass.set_pipeline(&render_pipeline);
                     pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                    pass.draw(0..*num_vertices, 0..1);                    
+                    pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16); // 1.
+                    pass.draw_indexed(0..*num_indices, 0, 0..1); // 2.                        
                 }
                 queue.submit(Some(encoder.finish()));
                 frame.present();
