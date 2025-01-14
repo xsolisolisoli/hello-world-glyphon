@@ -11,18 +11,19 @@ impl Texture {
     pub fn from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        bytes: &[u8],
-        label: &str,
-    ) -> Result<Self> {
+        bytes: &[u8], 
+        label: &str
+    ) -> Result<Self, anyhow::Error> {
         let img = image::load_from_memory(bytes)?;
-        Self::from_image(device,queue,&img,Some(label))
+        Self::from_image(device, queue, &img, Some(label))
     }
+
     pub fn from_image(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
         label: Option<&str>,
-    ) -> Result<Self> {
+    ) -> Result<Self, anyhow::Error> {
         let rgba = img.to_rgba8();
         let dimensions = img.dimensions();
         let size = wgpu::Extent3d {
@@ -38,9 +39,11 @@ impl Texture {
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
         });
         queue.write_texture(
             wgpu::ImageCopyTexture {
+                aspect: wgpu::TextureAspect::All,
                 texture: &texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
@@ -61,11 +64,7 @@ impl Texture {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Linear,
-            lod_min_clamp: -100.0,
-            lod_max_clamp: 100.0,
-            compare: None,
-            anisotropy_clamp: None,
-            border_color: None,
+            ..Default::default()
         });
         Ok(Self {
             texture,
