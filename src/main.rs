@@ -289,7 +289,15 @@ impl WindowState {
         //     },
         //     texture_size,   
         // );
-
+        let camera = Camera {
+            eye:(0.0, 1.0, 2.0).into(),
+            target: (0.0, 0.0, 0.0).into(),
+            up: cgmath::Vector3::unit_y(),
+            aspect: surface_config.width as f32 / surface_config.height as f32,
+            fovy: 45.0,
+            znear: 0.1,
+            zfar: 100.0,
+        };
 
         let mut font_system = FontSystem::new();
         let swash_cache = SwashCache::new();
