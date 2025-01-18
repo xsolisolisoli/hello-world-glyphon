@@ -425,10 +425,23 @@ impl WindowState {
             diffuse_texture,
             }
         }
+
+        fn input(&mut self, event: &WindowEvent) -> bool {
+            self.camera_controller.process_events(event)
+        }
+        fn update(&mut self) {
+            self.camera_controller.update_camera(&mut self.camera);
+            self.camera_uniform.update_view_proj(&self.camera);
+            self.queue.write_buffer(
+                &self.camera_buffer,
+                0,
+                bytemuck::cast_slice(&[self.camera_uniform]),
+            );
+        }
+        
     }
 
 
-    
     struct Application {
         window_state: Option<WindowState>,
     }
@@ -457,6 +470,9 @@ impl WindowState {
             let Some(state) = &mut self.window_state else {
                 return;
             };
+            state.update();
+            state.input(&event);
+
             let WindowState {
                 window,
                 device,
@@ -494,15 +510,12 @@ impl WindowState {
                     event:
                         KeyEvent {
                             state: ElementState::Pressed,
-                            physical_key: PhysicalKey::Code(KeyCode::Enter),
+                            physical_key: PhysicalKey::Code(KeyCode::KeyW),
                             ..
                         },
                     ..
                 } => {
-                    // if let PhysicalKey::Code(code) = event.physical_key {
-                    //     key_table[code as usize] = event.state.is_pressed();
-                    // }
-
+                    camera_controller.process_events(&event);
                     let inputMode = true;
                     info!("hi hi hi");
                     console::write_to_console(text_buffer, font_system, chat_text, "hi");
