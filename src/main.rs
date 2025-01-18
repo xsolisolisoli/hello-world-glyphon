@@ -2,6 +2,7 @@ use glyphon::{
     Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache,
     TextArea, TextAtlas, TextBounds, TextRenderer, Viewport,
 };
+use std::iter;
 mod texture;
 use std::sync::{Arc, Once};
 use wgpu::{
@@ -85,6 +86,7 @@ struct CameraUniform {
     view_proj: [[f32; 4]; 4],
 }
 
+
 impl CameraUniform {
     fn new() -> Self {
         use cgmath::SquareMatrix;
@@ -96,7 +98,6 @@ impl CameraUniform {
     fn update_view_proj(&mut self, camera: &Camera) {
         self.view_proj = camera.build_view_projection_matrix().into();
     }
-
 }
 
 
@@ -171,7 +172,6 @@ impl WindowState {
         let (device, queue) = adapter
             .request_device(&DeviceDescriptor::default(), None).await.unwrap();
 
-        let camera_controller = CameraController::new(0.2);
         let surface = instance.create_surface(window.clone()).expect("Create Surface");
 
         let vertex_buffer = device.create_buffer_init(
@@ -237,7 +237,7 @@ impl WindowState {
         surface.configure(&device, &surface_config);
 
         //CAMERA
-        let mut camera = Camera {
+        let camera = Camera {
             eye:(0.0, 1.0, 2.0).into(),
             target: (0.0, 0.0, 0.0).into(),
             up: cgmath::Vector3::unit_y(),
@@ -246,6 +246,8 @@ impl WindowState {
             znear: 0.1,
             zfar: 100.0,
         };
+        let camera_controller = CameraController::new(0.2);
+
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&camera);
         let camera_buffer = device.create_buffer_init(
@@ -352,6 +354,7 @@ impl WindowState {
             cache: None,
         });
         
+
          
         
             
@@ -426,6 +429,19 @@ impl WindowState {
             }
         }
 
+
+        
+        fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+            if new_size.width > 0 && new_size.height > 0 {
+                // self.size = new_size;
+                self.surface_config.width = new_size.width;
+                self.surface_config.height = new_size.height;
+                self.surface.configure(&self.device, &self.surface_config);
+
+                self.camera.aspect = self.surface_config.width as f32 / self.config.height as f32;
+            }
+        }
+
         fn input(&mut self, event: &WindowEvent) -> bool {
             self.camera_controller.process_events(event)
         }
@@ -438,8 +454,58 @@ impl WindowState {
                 bytemuck::cast_slice(&[self.camera_uniform]),
             );
         }
-        
+        fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+            let output = self.surface.get_current_texture()?;
+            let view = output
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+    
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Render Encoder"),
+                });
+    
+            {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Render Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.1,
+                                g: 0.2,
+                                b: 0.3,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+    
+                render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+                &self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
+
+            }
+    
+            self.queue.submit(iter::once(encoder.finish()));
+            output.present();
+    
+            Ok(())
+        }
     }
+ 
+        
+    
 
 
     struct Application {
@@ -470,7 +536,6 @@ impl WindowState {
             let Some(state) = &mut self.window_state else {
                 return;
             };
-            state.update();
             state.input(&event);
 
             let WindowState {
@@ -541,6 +606,26 @@ impl WindowState {
                 }
                 
                 WindowEvent::RedrawRequested => {
+                    state.update();
+                    match state.render() {
+                        Ok(_) => {}
+                        // Reconfigure the surface if it's lost or outdated
+                        Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                            let size = state.window.inner_size();
+                            state.resize(size);
+                        },
+                        // The system is out of memory, we should probably quit
+                        Err(wgpu::SurfaceError::OutOfMemory) => {
+                            log::error!("OutOfMemory");
+                            // control_flow.exit();
+                        }
+
+                        // This happens when the a frame takes too long to present
+                        Err(wgpu::SurfaceError::Timeout) => {
+                            log::warn!("Surface timeout")
+                        }
+                    }
+
                     viewport.update(
                         &queue,
                         Resolution {
@@ -588,17 +673,19 @@ impl WindowState {
                             timestamp_writes: None,
                             occlusion_query_set: None,
                     });
-                    camera_controller.update_camera(camera);
-                    camera_uniform.update_view_proj(&camera);
-                    queue.write_buffer(&camera_buffer, 0, bytemuck::cast_slice(&[*camera_uniform]));
+                    // camera_controller.update_camera(camera);
+                    // camera_uniform.update_view_proj(&camera);
+                    // queue.write_buffer(&camera_buffer, 0, bytemuck::cast_slice(&[*camera_uniform]));
 
-                    text_renderer.render(&atlas, &viewport, &mut pass).unwrap();
-                    pass.set_pipeline(&render_pipeline);
-                    pass.set_bind_group(0, &*diffuse_bind_group, &[]);
-                    pass.set_bind_group(1, &*camera_bind_group, &[]);
-                    pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                    pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);  
-                    pass.draw_indexed(0..*num_indices, 0, 0..1);                }
+                    // text_renderer.render(&atlas, &viewport, &mut pass).unwrap();
+                    // pass.set_pipeline(&render_pipeline);
+                    // pass.set_bind_group(0, &*diffuse_bind_group, &[]);
+
+                    // pass.set_bind_group(1, &*camera_bind_group, &[]);
+                    // pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    // pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    // pass.draw_indexed(0..*num_indices, 0, 0..1);                
+                }
 
                 queue.submit(Some(encoder.finish()));
                 frame.present();
