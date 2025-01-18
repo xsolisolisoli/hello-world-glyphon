@@ -14,12 +14,15 @@ use wgpu::{
 use winit::{dpi::LogicalSize, event::{KeyEvent, WindowEvent}, event_loop::EventLoop, keyboard::{KeyCode, PhysicalKey}, window::Window};
 use winit::event::{ElementState};
 use log::info;
+use env_logger::Env;
 mod console;
+mod cameracontroller;
+use cameracontroller::CameraController;
 static INIT: Once = Once::new();
 
 fn main() {
     INIT.call_once(|| {
-        env_logger::init();
+        env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     });
     let event_loop = EventLoop::new().unwrap();
     event_loop
@@ -71,6 +74,33 @@ impl Camera {
         return OPENGL_TO_WGPU_MATRIX * proj * view;
     }
 }
+
+// We need this for Rust to store our data correctly for the shaders
+#[repr(C)]
+// This is so we can store this in a buffer
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct CameraUniform {
+    // We can't use cgmath with bytemuck directly, so we'll have
+    // to convert the Matrix4 into a 4x4 f32 array
+    view_proj: [[f32; 4]; 4],
+}
+
+impl CameraUniform {
+    fn new() -> Self {
+        use cgmath::SquareMatrix;
+        Self {
+            view_proj: cgmath::Matrix4::identity().into(),
+        }
+    }
+
+    fn update_view_proj(&mut self, camera: &Camera) {
+        self.view_proj = camera.build_view_projection_matrix().into();
+    }
+
+}
+
+
+
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     1.0, 0.0, 0.0, 0.0,
@@ -98,6 +128,10 @@ struct WindowState {
     num_indices: u32,
     window: Arc<Window>,
     camera: Camera,
+    camera_controller: CameraController,
+    camera_uniform: CameraUniform,
+    camera_buffer: wgpu::Buffer,
+    camera_bind_group: wgpu::BindGroup,
     diffuse_bind_group: wgpu::BindGroup,
     diffuse_texture: texture::Texture,
 }
@@ -137,7 +171,7 @@ impl WindowState {
         let (device, queue) = adapter
             .request_device(&DeviceDescriptor::default(), None).await.unwrap();
 
-
+        let camera_controller = CameraController::new(0.2);
         let surface = instance.create_surface(window.clone()).expect("Create Surface");
 
         let vertex_buffer = device.create_buffer_init(
@@ -162,6 +196,8 @@ impl WindowState {
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
+
+
         let swapchain_format = TextureFormat::Bgra8UnormSrgb;
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -185,11 +221,96 @@ impl WindowState {
                 ],
                 label: Some("texture_bind_group_layout"),
             });
-            let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout],            
-                push_constant_ranges: &[],
-            });
+
+    
+
+        let surface_config = SurfaceConfiguration {
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            format: swapchain_format,
+            width: physical_size.width,
+            height: physical_size.height,
+            present_mode: PresentMode::Fifo,
+            alpha_mode: CompositeAlphaMode::Opaque,
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+        surface.configure(&device, &surface_config);
+
+        //CAMERA
+        let mut camera = Camera {
+            eye:(0.0, 1.0, 2.0).into(),
+            target: (0.0, 0.0, 0.0).into(),
+            up: cgmath::Vector3::unit_y(),
+            aspect: surface_config.width as f32 / surface_config.height as f32,
+            fovy: 45.0,
+            znear: 0.1,
+            zfar: 100.0,
+        };
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&camera);
+        let camera_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Camera Buffer"),
+                contents: bytemuck::cast_slice(&[camera_uniform]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            }
+        );
+
+        let camera_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }
+            ],
+            label: Some("camera_bind_group_layout"),
+        });
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &camera_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: camera_buffer.as_entire_binding(),
+                }
+            ],
+            label: Some("camera_bind_group"),
+        });
+
+
+        //textures
+        let diffuse_bytes = include_bytes!("./assets/cretin.png");
+        let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
+        let diffuse_texture = texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "cretin.png").unwrap(); // CHANGED!
+
+
+        let diffuse_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &texture_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&diffuse_texture.view), // CHANGED!
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler), // CHANGED!
+                    }
+                ],
+                label: Some("diffuse_bind_group"),
+            }
+        );
+    
+        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],            
+            push_constant_ranges: &[],
+        });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
@@ -230,44 +351,6 @@ impl WindowState {
             multiview: None,
             cache: None,
         });
-    
-
-        let surface_config = SurfaceConfiguration {
-            usage: TextureUsages::RENDER_ATTACHMENT,
-            format: swapchain_format,
-            width: physical_size.width,
-            height: physical_size.height,
-            present_mode: PresentMode::Fifo,
-            alpha_mode: CompositeAlphaMode::Opaque,
-            view_formats: vec![],
-            desired_maximum_frame_latency: 2,
-        };
-        surface.configure(&device, &surface_config);
-
-        //textures
-        let diffuse_bytes = include_bytes!("./assets/cretin.png");
-        let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
-        let diffuse_texture = texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "cretin.png").unwrap(); // CHANGED!
-
-
-        let diffuse_bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                layout: &texture_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&diffuse_texture.view), // CHANGED!
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler), // CHANGED!
-                    }
-                ],
-                label: Some("diffuse_bind_group"),
-            }
-        );
-        
-         
         
          
         
@@ -289,15 +372,10 @@ impl WindowState {
         //     },
         //     texture_size,   
         // );
-        let camera = Camera {
-            eye:(0.0, 1.0, 2.0).into(),
-            target: (0.0, 0.0, 0.0).into(),
-            up: cgmath::Vector3::unit_y(),
-            aspect: surface_config.width as f32 / surface_config.height as f32,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
-        };
+        
+         
+        
+                 
 
         let mut font_system = FontSystem::new();
         let swash_cache = SwashCache::new();
@@ -339,12 +417,18 @@ impl WindowState {
             num_indices,
             window,
             camera,
+            camera_uniform,
+            camera_buffer,
+            camera_bind_group,
+            camera_controller,
             diffuse_bind_group,
             diffuse_texture,
             }
         }
     }
 
+
+    
     struct Application {
         window_state: Option<WindowState>,
     }
@@ -361,6 +445,9 @@ impl WindowState {
             let window = Arc::new(event_loop.create_window(window_attributes).unwrap());        
         self.window_state = Some(pollster::block_on(WindowState::new(window)));
         }
+
+
+
         fn window_event(
             &mut self,
             event_loop: &winit::event_loop::ActiveEventLoop,
@@ -389,13 +476,20 @@ impl WindowState {
                 num_indices,
                 diffuse_bind_group,
                 diffuse_texture,
+                camera,
+                camera_controller,
+                camera_uniform,
+                camera_bind_group,
+                camera_buffer,
                 ..
             } = state;
             let chat_text = &mut state.chat_text;
             //Will be used for command mapping
             let mut key_table = vec![false; 255].into_boxed_slice();
 
+
             match event {
+                //Todo refactor, this was for when enter was the only thing lol
                 WindowEvent::KeyboardInput {
                     event:
                         KeyEvent {
@@ -414,12 +508,25 @@ impl WindowState {
                     console::write_to_console(text_buffer, font_system, chat_text, "hi");
                     window.request_redraw();
                 }
+                //Any key pressed
+                WindowEvent::KeyboardInput {
+                    event:
+                        KeyEvent {
+                            state: ElementState::Pressed,
+                            ..
+                        },
+                    ..
+                } => {
+                    camera_controller.process_events(&event);
+                }
+
                 WindowEvent::Resized(size) => {
                     surface_config.width = size.width;
                     surface_config.height = size.height;
                     surface.configure(&device, surface_config);
                     window.request_redraw();
                 }
+                
                 WindowEvent::RedrawRequested => {
                     viewport.update(
                         &queue,
@@ -468,9 +575,14 @@ impl WindowState {
                             timestamp_writes: None,
                             occlusion_query_set: None,
                     });
+                    camera_controller.update_camera(camera);
+                    camera_uniform.update_view_proj(&camera);
+                    queue.write_buffer(&camera_buffer, 0, bytemuck::cast_slice(&[*camera_uniform]));
+
                     text_renderer.render(&atlas, &viewport, &mut pass).unwrap();
                     pass.set_pipeline(&render_pipeline);
                     pass.set_bind_group(0, &*diffuse_bind_group, &[]);
+                    pass.set_bind_group(1, &*camera_bind_group, &[]);
                     pass.set_vertex_buffer(0, vertex_buffer.slice(..));
                     pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);  
                     pass.draw_indexed(0..*num_indices, 0, 0..1);                }
