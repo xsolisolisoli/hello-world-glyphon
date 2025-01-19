@@ -438,7 +438,7 @@ impl WindowState {
                 self.surface_config.height = new_size.height;
                 self.surface.configure(&self.device, &self.surface_config);
 
-                self.camera.aspect = self.surface_config.width as f32 / self.config.height as f32;
+                self.camera.aspect = self.surface_config.width as f32 / self.surface_config.height as f32;
             }
         }
 
@@ -537,8 +537,26 @@ impl WindowState {
                 return;
             };
             state.input(&event);
+            state.update();
+            match state.render() {
+                Ok(_) => {}
+                // Reconfigure the surface if it's lost or outdated
+                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                    let size = state.window.inner_size();
+                    state.resize(size);
+                },
+                // The system is out of memory, we should probably quit
+                Err(wgpu::SurfaceError::OutOfMemory) => {
+                    log::error!("OutOfMemory");
+                    // control_flow.exit();
+                }
 
-            let WindowState {
+                // This happens when the a frame takes too long to present
+                Err(wgpu::SurfaceError::Timeout) => {
+                    log::warn!("Surface timeout")
+                }
+            }
+                let WindowState {
                 window,
                 device,
                 queue,
@@ -606,26 +624,6 @@ impl WindowState {
                 }
                 
                 WindowEvent::RedrawRequested => {
-                    state.update();
-                    match state.render() {
-                        Ok(_) => {}
-                        // Reconfigure the surface if it's lost or outdated
-                        Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                            let size = state.window.inner_size();
-                            state.resize(size);
-                        },
-                        // The system is out of memory, we should probably quit
-                        Err(wgpu::SurfaceError::OutOfMemory) => {
-                            log::error!("OutOfMemory");
-                            // control_flow.exit();
-                        }
-
-                        // This happens when the a frame takes too long to present
-                        Err(wgpu::SurfaceError::Timeout) => {
-                            log::warn!("Surface timeout")
-                        }
-                    }
-
                     viewport.update(
                         &queue,
                         Resolution {
@@ -656,38 +654,6 @@ impl WindowState {
                     let frame = surface.get_current_texture().unwrap();
                     let view = frame.texture.create_view(&TextureViewDescriptor::default());
                     let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor { label: None });
-
-
-                    {
-                        let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                            label: Some("Render pass"),
-                            color_attachments: &[Some(RenderPassColorAttachment {
-                                view: &view,
-                                resolve_target: None,
-                                ops: Operations {
-                                    load: LoadOp::Clear(wgpu::Color::RED),
-                                    store: wgpu::StoreOp::Store,
-                                },
-                            })],
-                            depth_stencil_attachment: None,
-                            timestamp_writes: None,
-                            occlusion_query_set: None,
-                    });
-                    // camera_controller.update_camera(camera);
-                    // camera_uniform.update_view_proj(&camera);
-                    // queue.write_buffer(&camera_buffer, 0, bytemuck::cast_slice(&[*camera_uniform]));
-
-                    // text_renderer.render(&atlas, &viewport, &mut pass).unwrap();
-                    // pass.set_pipeline(&render_pipeline);
-                    // pass.set_bind_group(0, &*diffuse_bind_group, &[]);
-
-                    // pass.set_bind_group(1, &*camera_bind_group, &[]);
-                    // pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                    // pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                    // pass.draw_indexed(0..*num_indices, 0, 0..1);                
-                }
-
-                queue.submit(Some(encoder.finish()));
                 frame.present();
 
                 atlas.trim();
