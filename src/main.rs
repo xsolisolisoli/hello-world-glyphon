@@ -496,10 +496,8 @@ impl WindowState {
                 &self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
 
             }
-    
             self.queue.submit(iter::once(encoder.finish()));
             output.present();
-    
             Ok(())
         }
     }
@@ -536,7 +534,10 @@ impl WindowState {
             let Some(state) = &mut self.window_state else {
                 return;
             };
-            state.input(&event);
+            // state.input(&event);
+            if !state.input(&event) {
+                info!("input event not handled");
+            }
             state.update();
             match state.render() {
                 Ok(_) => {}
