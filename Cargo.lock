@@ -3,6 +3,28 @@
 version = 4
 
 [[package]]
+name = "WGPU-Sandbox"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "cgmath",
+ "cosmic-text",
+ "criterion",
+ "env_logger",
+ "etagere",
+ "glyphon",
+ "image",
+ "log",
+ "lru",
+ "pollster",
+ "resvg",
+ "rustc-hash 2.1.0",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "ab_glyph"
 version = "0.2.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -851,28 +873,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 dependencies = [
  "foldhash",
-]
-
-[[package]]
-name = "hello-world-glyphon"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytemuck",
- "cgmath",
- "cosmic-text",
- "criterion",
- "env_logger",
- "etagere",
- "glyphon",
- "image",
- "log",
- "lru",
- "pollster",
- "resvg",
- "rustc-hash 2.1.0",
- "wgpu",
- "winit",
 ]
 
 [[package]]
