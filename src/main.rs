@@ -2,12 +2,13 @@ use glyphon::{
     Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache,
     TextArea, TextAtlas, TextBounds, TextRenderer, Viewport,
 };
+use cgmath::prelude::*;
 use std::iter;
 mod texture;
 use std::sync::{Arc, Once};
 use wgpu::{
-    util::DeviceExt,
-    CommandEncoderDescriptor, CompositeAlphaMode, DeviceDescriptor, Instance, InstanceDescriptor,
+    util::DeviceExt, Instance,
+    CommandEncoderDescriptor, CompositeAlphaMode, DeviceDescriptor, InstanceDescriptor,
     LoadOp, MultisampleState, Operations, PresentMode, RenderPassColorAttachment,
     RenderPassDescriptor, RequestAdapterOptions, SurfaceConfiguration, TextureFormat,
     TextureUsages, TextureViewDescriptor,
@@ -42,22 +43,132 @@ struct Vertex {
     // color: [f32; 3],
     tex_coords: [f32; 2], // NEW!
 }
+struct Instanced {
+    position: cgmath::Vector3<f32>,
+    rotation: cgmath::Quaternion<f32>,
+    // color: [f32; 3],
+}
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct InstanceRaw {
+    model: [[f32; 4]; 4],
+}
+impl Instanced {
+    fn to_raw(&self) -> InstanceRaw {
+        InstanceRaw {
+            model: (cgmath::Matrix4::from_translation(self.position) * cgmath::Matrix4::from(self.rotation)).into(),
+        }
+    }
+}
+impl InstanceRaw {
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        use std::mem;
+        wgpu::VertexBufferLayout {
+            array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
+            // We need to switch from using a step mode of Vertex to Instance
+            // This means that our shaders will only change to use the next
+            // instance when the shader starts processing a new instance
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &[
+                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We need to define a slot
+                // for each vec4. We'll have to reassemble the mat4 in the shader.
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    // While our vertex shader only uses locations 0, and 1 now, in later tutorials, we'll
+                    // be using 2, 3, and 4, for Vertex. We'll start at slot 5, not conflict with them later
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+                    shader_location: 6,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
+                    shader_location: 7,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
+                    shader_location: 8,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+            ],
+        }
+    }
+}
+
+ 
+
+ 
+
+
+// const VERTICES: &[Vertex] = &[
+//     // Changed
+//     Vertex { position: [-0.0868241, 0.49240386, 0.0], tex_coords: [0.4131759, 0.00759614], }, // A
+//     Vertex { position: [-0.49513406, 0.06958647, 0.0], tex_coords: [0.0048659444, 0.43041354], }, // B
+//     Vertex { position: [-0.21918549, -0.44939706, 0.0], tex_coords: [0.28081453, 0.949397], }, // C
+//     Vertex { position: [0.35966998, -0.3473291, 0.0], tex_coords: [0.85967, 0.84732914], }, // D
+//     Vertex { position: [0.44147372, 0.2347359, 0.0], tex_coords: [0.9414737, 0.2652641], }, // E
+// ];
+// const INDICES: &[u16] = &[
+//     0, 1, 4,
+//     1, 2, 4,
+//     2, 3, 4,
+// ];
 
 
 const VERTICES: &[Vertex] = &[
-    // Changed
-    Vertex { position: [-0.0868241, 0.49240386, 0.0], tex_coords: [0.4131759, 0.00759614], }, // A
-    Vertex { position: [-0.49513406, 0.06958647, 0.0], tex_coords: [0.0048659444, 0.43041354], }, // B
-    Vertex { position: [-0.21918549, -0.44939706, 0.0], tex_coords: [0.28081453, 0.949397], }, // C
-    Vertex { position: [0.35966998, -0.3473291, 0.0], tex_coords: [0.85967, 0.84732914], }, // D
-    Vertex { position: [0.44147372, 0.2347359, 0.0], tex_coords: [0.9414737, 0.2652641], }, // E
+    // Front face
+    Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], },
+    Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
+    Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
+    Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], },
+    // Back face
+    Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [1.0, 0.0], },
+    Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [0.0, 0.0], },
+    Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [0.0, 1.0], },
+    Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [1.0, 1.0], },
+    // Top face
+    Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [0.0, 0.0], },
+    Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [1.0, 0.0], },
+    Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
+    Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], },
+    // Bottom face
+    Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [1.0, 1.0], },
+    Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [0.0, 1.0], },
+    Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], },
+    Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
+    // Right face
+    Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [1.0, 0.0], },
+    Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [1.0, 1.0], },
+    Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], },
+    Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], },
+    // Left face
+    Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [0.0, 0.0], },
+    Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [0.0, 1.0], },
+    Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
+    Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
 ];
 
 const INDICES: &[u16] = &[
-    0, 1, 4,
-    1, 2, 4,
-    2, 3, 4,
+    // Front face
+    0, 1, 2, 2, 3, 0,
+    // Back face
+    4, 5, 6, 6, 7, 4,
+    // Top face
+    8, 9, 10, 10, 11, 8,
+    // Bottom face
+    12, 13, 14, 14, 15, 12,
+    // Right face
+    16, 17, 18, 18, 19, 16,
+    // Left face
+    20, 21, 22, 22, 23, 20,
 ];
+
+const NUM_INSTANCES_PER_ROW: u32 = 10;
+const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(NUM_INSTANCES_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCES_PER_ROW as f32 * 0.5);
 
 struct Camera {
     eye: cgmath::Point3<f32>,
@@ -86,7 +197,6 @@ struct CameraUniform {
     view_proj: [[f32; 4]; 4],
 }
 
-
 impl CameraUniform {
     fn new() -> Self {
         use cgmath::SquareMatrix;
@@ -110,8 +220,9 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     0.0, 0.0, 0.0, 1.0,
 );
 
-
 struct WindowState {
+    instances: Vec<Instanced>,
+    instance_buffer: wgpu::Buffer,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
@@ -165,6 +276,25 @@ impl WindowState {
         let physical_size = window.inner_size();
         let scale_factor = window.scale_factor();
 
+        //Instance code
+        let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
+            (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                let position = cgmath::Vector3 { x: x as f32, y: 0.0, z: z as f32 } - INSTANCE_DISPLACEMENT;
+
+                let rotation = if position.is_zero() {
+                    // this is needed so an object at (0, 0, 0) won't get scaled to zero
+                    // as Quaternions can affect scale if they're not created correctly
+                    cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
+                } else {
+                    cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                };
+
+                Instanced {
+                    position, rotation,
+                }
+            })
+        }).collect::<Vec<_>>();
+
         let instance = Instance::new(InstanceDescriptor::default());
         let adapter = instance
             .request_adapter(&RequestAdapterOptions::default())
@@ -195,6 +325,16 @@ impl WindowState {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
+
+        let instance_data = instances.iter().map(Instanced::to_raw).collect::<Vec<_>>();
+        let instance_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Instance Buffer"),
+                contents: bytemuck::cast_slice(&instance_data),
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        );
+        
 
 
 
@@ -322,6 +462,7 @@ impl WindowState {
                 entry_point: Some("vs_main"),
                 buffers: &[
                     Vertex::desc(),
+                    InstanceRaw::desc(),
                 ],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
@@ -426,6 +567,8 @@ impl WindowState {
             camera_controller,
             diffuse_bind_group,
             diffuse_texture,
+            instances,
+            instance_buffer
             }
         }
 
@@ -491,7 +634,11 @@ impl WindowState {
                 render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
                 render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+                render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
                 render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+
+                // render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                 render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
                 &self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
 
@@ -581,6 +728,8 @@ impl WindowState {
                 camera_uniform,
                 camera_bind_group,
                 camera_buffer,
+                instances,
+                instance_buffer,
                 ..
             } = state;
             let chat_text = &mut state.chat_text;
