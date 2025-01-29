@@ -7,7 +7,7 @@ mod window_state;
 
 use crate::window_state::WindowState;
 use std::sync::{Arc, Once};
-use winit::{dpi::LogicalSize, event::{KeyEvent, WindowEvent}, event_loop::EventLoop, keyboard::{KeyCode, PhysicalKey}, window::Window};
+use winit::{dpi::LogicalSize, event::{ElementState, KeyEvent, WindowEvent}, event_loop::EventLoop, keyboard::{KeyCode, PhysicalKey}, window::Window};
 use log::info;
 use env_logger::Env;
 use glyphon::{Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
@@ -171,8 +171,8 @@ impl winit::application::ApplicationHandler for Application {
                 ).unwrap();
                 
                 let frame = surface.get_current_texture().unwrap();
-                let view = frame.texture.create_view(&TextureViewDescriptor::default());
-                let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor { label: None });
+                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
             frame.present();
 
             atlas.trim();

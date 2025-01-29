@@ -1,12 +1,67 @@
 use crate::camera::{Camera, CameraUniform};
 use crate::texture;
 use crate::vertex::{Vertex, Instanced, InstanceRaw};
+use cgmath::{InnerSpace, Rotation3, Zero};
 use glyphon::{Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
+use winit::event::WindowEvent;
 use std::sync::Arc;
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, CompositeAlphaMode, DeviceDescriptor, Instance, InstanceDescriptor, LoadOp, MultisampleState, Operations, PresentMode, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::window::Window;
 use crate::cameracontroller::CameraController;
 use std::iter;
+
+const VERTICES: &[Vertex] = &[
+    // Front face
+    Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], },
+    Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
+    Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
+    Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], },
+    // Back face
+    Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [1.0, 0.0], },
+    Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [0.0, 0.0], },
+    Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [0.0, 1.0], },
+    Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [1.0, 1.0], },
+    // Top face
+    Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [0.0, 0.0], },
+    Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [1.0, 0.0], },
+    Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
+    Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], },
+    // Bottom face
+    Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [1.0, 1.0], },
+    Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [0.0, 1.0], },
+    Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], },
+    Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
+    // Right face
+    Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [1.0, 0.0], },
+    Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [1.0, 1.0], },
+    Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], },
+    Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], },
+    // Left face
+    Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [0.0, 0.0], },
+    Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [0.0, 1.0], },
+    Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
+    Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
+];
+
+const INDICES: &[u16] = &[
+    // Front face
+    0, 1, 2, 2, 3, 0,
+    // Back face
+    4, 5, 6, 6, 7, 4,
+    // Top face
+    8, 9, 10, 10, 11, 8,
+    // Bottom face
+    12, 13, 14, 14, 15, 12,
+    // Right face
+    16, 17, 18, 18, 19, 16,
+    // Left face
+    20, 21, 22, 22, 23, 20,
+];
+
+const NUM_INSTANCES_PER_ROW: u32 = 10;
+const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(NUM_INSTANCES_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCES_PER_ROW as f32 * 0.5);
+
+
 pub struct WindowState {
     pub instances: Vec<Instanced>,
     pub instance_buffer: wgpu::Buffer,
@@ -35,7 +90,7 @@ pub struct WindowState {
     pub diffuse_texture: crate::texture::Texture,
 }
 impl WindowState {
-    async fn new(window: Arc<Window>) -> Self {
+    pub async fn new(window: Arc<Window>) -> Self {
         let physical_size = window.inner_size();
         let scale_factor = window.scale_factor();
 
@@ -337,7 +392,7 @@ impl WindowState {
 
 
         
-        fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
             if new_size.width > 0 && new_size.height > 0 {
                 // self.size = new_size;
                 self.surface_config.width = new_size.width;
@@ -348,10 +403,10 @@ impl WindowState {
             }
         }
 
-        fn input(&mut self, event: &WindowEvent) -> bool {
+        pub fn input(&mut self, event: &WindowEvent) -> bool {
             self.camera_controller.process_events(event)
         }
-        fn update(&mut self) {
+        pub fn update(&mut self) {
             self.camera_controller.update_camera(&mut self.camera);
             self.camera_uniform.update_view_proj(&self.camera);
             self.queue.write_buffer(
@@ -360,7 +415,7 @@ impl WindowState {
                 bytemuck::cast_slice(&[self.camera_uniform]),
             );
         }
-        fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
             let output = self.surface.get_current_texture()?;
             let view = output
                 .texture
