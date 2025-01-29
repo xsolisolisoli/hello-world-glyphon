@@ -1,5 +1,6 @@
 use cgmath::prelude::*;
 use wgpu::util::DeviceExt;
+use cgmath::prelude::*;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]

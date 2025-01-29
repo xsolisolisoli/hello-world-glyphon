@@ -3,64 +3,78 @@ use crate::texture;
 use crate::vertex::{Vertex, Instanced, InstanceRaw};
 use cgmath::{InnerSpace, Rotation3, Zero};
 use glyphon::{Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
+use wgpu::util::RenderEncoder;
 use winit::event::WindowEvent;
+use std::collections::btree_map::Range;
 use std::sync::Arc;
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, CompositeAlphaMode, DeviceDescriptor, Instance, InstanceDescriptor, LoadOp, MultisampleState, Operations, PresentMode, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::window::Window;
 use crate::cameracontroller::CameraController;
 use std::iter;
-
+//Skybox
+// const VERTICES: &[Vertex] = &[
+//     // Front face
+//     Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], },
+//     Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
+//     Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
+//     Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], },
+//     // Back face
+//     Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [1.0, 0.0], },
+//     Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [0.0, 0.0], },
+//     Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [0.0, 1.0], },
+//     Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [1.0, 1.0], },
+//     // Top face
+//     Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [0.0, 0.0], },
+//     Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [1.0, 0.0], },
+//     Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
+//     Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], },
+//     // Bottom face
+//     Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [1.0, 1.0], },
+//     Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [0.0, 1.0], },
+//     Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], },
+//     Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
+//     // Right face
+//     Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [1.0, 0.0], },
+//     Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [1.0, 1.0], },
+//     Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], },
+//     Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], },
+//     // Left face
+//     Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [0.0, 0.0], },
+//     Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [0.0, 1.0], },
+//     Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
+//     Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
+// ];
 const VERTICES: &[Vertex] = &[
-    // Front face
-    Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], },
-    Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
-    Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
-    Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], },
-    // Back face
-    Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [1.0, 0.0], },
-    Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [0.0, 0.0], },
-    Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [0.0, 1.0], },
-    Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [1.0, 1.0], },
-    // Top face
-    Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [0.0, 0.0], },
-    Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [1.0, 0.0], },
-    Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
-    Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], },
-    // Bottom face
-    Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [1.0, 1.0], },
-    Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [0.0, 1.0], },
-    Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], },
-    Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
-    // Right face
-    Vertex { position: [ 0.5, -0.5, -0.5], tex_coords: [1.0, 0.0], },
-    Vertex { position: [ 0.5,  0.5, -0.5], tex_coords: [1.0, 1.0], },
-    Vertex { position: [ 0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], },
-    Vertex { position: [ 0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], },
-    // Left face
-    Vertex { position: [-0.5, -0.5, -0.5], tex_coords: [0.0, 0.0], },
-    Vertex { position: [-0.5,  0.5, -0.5], tex_coords: [0.0, 1.0], },
-    Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
-    Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
+    Vertex {
+        position: [-0.0868241, 0.49240386, 0.0],
+        tex_coords: [0.4131759, 0.00759614],
+    }, // A
+    Vertex {
+        position: [-0.49513406, 0.06958647, 0.0],
+        tex_coords: [0.0048659444, 0.43041354],
+    }, // B
+    Vertex {
+        position: [-0.21918549, -0.44939706, 0.0],
+        tex_coords: [0.28081453, 0.949397],
+    }, // C
+    Vertex {
+        position: [0.35966998, -0.3473291, 0.0],
+        tex_coords: [0.85967, 0.84732914],
+    }, // D
+    Vertex {
+        position: [0.44147372, 0.2347359, 0.0],
+        tex_coords: [0.9414737, 0.2652641],
+    }, // E
 ];
 
-const INDICES: &[u16] = &[
-    // Front face
-    0, 1, 2, 2, 3, 0,
-    // Back face
-    4, 5, 6, 6, 7, 4,
-    // Top face
-    8, 9, 10, 10, 11, 8,
-    // Bottom face
-    12, 13, 14, 14, 15, 12,
-    // Right face
-    16, 17, 18, 18, 19, 16,
-    // Left face
-    20, 21, 22, 22, 23, 20,
-];
+const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
-const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(NUM_INSTANCES_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCES_PER_ROW as f32 * 0.5);
-
+const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
+    NUM_INSTANCES_PER_ROW as f32 * 0.5,
+    0.0,
+    NUM_INSTANCES_PER_ROW as f32 * 0.5,
+);
 
 pub struct WindowState {
     pub instances: Vec<Instanced>,
@@ -390,8 +404,6 @@ impl WindowState {
             }
         }
 
-
-        
         pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
             if new_size.width > 0 && new_size.height > 0 {
                 // self.size = new_size;
@@ -457,7 +469,7 @@ impl WindowState {
                 render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
                 // render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+                render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as _);
                 &self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
 
             }
