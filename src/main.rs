@@ -62,84 +62,93 @@ impl winit::application::ApplicationHandler for Application {
         let Some(state) = &mut self.window_state else {
             return;
         };
-
         // Handle input and updates first
+        // let handled = state.input(&event);
+        // if !handled {
+        //     info!("input event not handled");
+        // }
+        let is_keyboard_event = matches!(event, WindowEvent::KeyboardInput { .. });
         let handled = state.input(&event);
-        if !handled {
+
+        if is_keyboard_event && !handled {
+            info!("keyboard event not handled");
+        }
+
+
             info!("input event not handled");
-        }
-        state.update();
+            match event {
+                WindowEvent::Resized(physical_size) => {
+                    state.resize(physical_size);
+                    state.window.request_redraw();
+                }
+                WindowEvent::KeyboardInput { event: KeyEvent { state: ElementState::Pressed, physical_key, .. }, .. } => {
+                    match physical_key {
+                        PhysicalKey::Code(KeyCode::KeyW) => {
+                            console::write_to_console(
+                                &mut state.text_buffer,
+                                &mut state.font_system,
+                                &mut state.chat_text,
+                                "hi",
+                            );
+                            state.window.request_redraw();
+                        }
+                        _ => {}
+                    }
+                }
+                WindowEvent::RedrawRequested => {
+                    state.window.request_redraw();
+                    // Update text rendering viewport
+                    state.viewport.update(
+                        &state.queue,
+                        Resolution {
+                            width: state.surface_config.width,
+                            height: state.surface_config.height,
+                        },
+                    );
+                    state.update();
 
+                    // Prepare text rendering
+                    let text_area = TextArea {
+                        buffer: &state.text_buffer,
+                        left: 10.0,
+                        top: 10.0,
+                        scale: 1.0,
+                        bounds: TextBounds {
+                            left: 0,
+                            top: 0,
+                            right: 600,
+                            bottom: 160
+                        },
+                        default_color: Color::rgb(255, 255, 255),
+                        custom_glyphs: &[],
+                    };
+    
+                    state.text_renderer.prepare(
+                        &state.device,
+                        &state.queue,
+                        &mut state.font_system,
+                        &mut state.atlas,
+                        &state.viewport,
+                        [text_area],
+                        &mut state.swash_cache,
+                    ).unwrap();
+    
+                    // Handle main rendering
+                    match state.render() {
+                        Ok(_) => {}
+                        Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                            state.resize(state.window.inner_size());
+                        }
+                        Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
+                        Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
+                    }
+    
+                    state.atlas.trim();
+                }
+                WindowEvent::CloseRequested => event_loop.exit(),
+                _ => {}
+            }
         // Handle window events
-        match event {
-            WindowEvent::Resized(physical_size) => {
-                state.resize(physical_size);
-                state.window.request_redraw();
-            }
-            WindowEvent::KeyboardInput { event: KeyEvent { state: ElementState::Pressed, physical_key, .. }, .. } => {
-                match physical_key {
-                    PhysicalKey::Code(KeyCode::KeyW) => {
-                        console::write_to_console(
-                            &mut state.text_buffer,
-                            &mut state.font_system,
-                            &mut state.chat_text,
-                            "hi",
-                        );
-                        state.window.request_redraw();
-                    }
-                    _ => {}
-                }
-            }
-            WindowEvent::RedrawRequested => {
-                // Update text rendering viewport
-                state.viewport.update(
-                    &state.queue,
-                    Resolution {
-                        width: state.surface_config.width,
-                        height: state.surface_config.height,
-                    },
-                );
 
-                // Prepare text rendering
-                let text_area = TextArea {
-                    buffer: &state.text_buffer,
-                    left: 10.0,
-                    top: 10.0,
-                    scale: 1.0,
-                    bounds: TextBounds {
-                        left: 0,
-                        top: 0,
-                        right: 600,
-                        bottom: 160
-                    },
-                    default_color: Color::rgb(255, 255, 255),
-                    custom_glyphs: &[],
-                };
-
-                state.text_renderer.prepare(
-                    &state.device,
-                    &state.queue,
-                    &mut state.font_system,
-                    &mut state.atlas,
-                    &state.viewport,
-                    [text_area],
-                    &mut state.swash_cache,
-                ).unwrap();
-
-                // Handle main rendering
-                match state.render() {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        state.resize(state.window.inner_size());
-                    }
-                    Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
-                    Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
-                }
-
-                state.atlas.trim();
-            }
-            WindowEvent::CloseRequested => event_loop.exit(),
-            _ => {}
-        }
     }
 }

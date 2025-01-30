@@ -32,9 +32,10 @@ impl CameraController {
                 ..
             } => {
                 let is_pressed = *state == ElementState::Pressed;
-                match keycode {KeyCode::KeyW | KeyCode::ArrowUp => {
+                match keycode {
+                    KeyCode::KeyW | KeyCode::ArrowUp => {
                         self.is_forward_pressed = is_pressed;
-                        true
+                        true // Signal this key was handled
                     }
                     KeyCode::KeyA | KeyCode::ArrowLeft => {
                         self.is_left_pressed = is_pressed;
@@ -48,10 +49,10 @@ impl CameraController {
                         self.is_right_pressed = is_pressed;
                         true
                     }
-                    _ => false,
+                    _ => false, // Unhandled key
                 }
             }
-            _ => false,
+            _ => false, // Not a keyboard event
         }
     }
 
