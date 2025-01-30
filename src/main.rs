@@ -7,10 +7,16 @@ mod window_state;
 
 use crate::window_state::WindowState;
 use std::sync::{Arc, Once};
-use winit::{dpi::LogicalSize, event::{ElementState, KeyEvent, WindowEvent}, event_loop::EventLoop, keyboard::{KeyCode, PhysicalKey}, window::Window};
+use winit::{
+    dpi::LogicalSize,
+    event::{ElementState, KeyEvent, WindowEvent},
+    event_loop::EventLoop,
+    keyboard::{KeyCode, PhysicalKey},
+    window::Window,
+};
 use log::info;
 use env_logger::Env;
-use glyphon::{Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
+use glyphon::{Attrs, Buffer, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextBounds};
 
 static INIT: Once = Once::new();
 
@@ -20,7 +26,7 @@ fn main() {
     });
     let event_loop = EventLoop::new().unwrap();
     event_loop
-        .run_app(&mut Application {window_state: None})
+        .run_app(&mut Application { window_state: None })
         .unwrap();
 }
 
@@ -29,16 +35,22 @@ struct Application {
 }
 
 impl winit::application::ApplicationHandler for Application {
-    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop){ 
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) { 
         if self.window_state.is_some() {
             return;
         }
-        let (width, height) = (800, 600);
-        let window_attributes = Window::default_attributes()
-            .with_inner_size(LogicalSize::new(width as f64, height as f64))
-            .with_title("glyphon hello world");
-        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());        
-    self.window_state = Some(pollster::block_on(WindowState::new(window)));
+        
+        let window = Arc::new(
+            event_loop
+                .create_window(
+                    Window::default_attributes()
+                        .with_inner_size(LogicalSize::new(800.0, 600.0))
+                        .with_title("glyphon hello world")
+                )
+                .unwrap()
+        );
+        
+        self.window_state = Some(pollster::block_on(WindowState::new(window)));
     }
 
     fn window_event(
@@ -50,135 +62,84 @@ impl winit::application::ApplicationHandler for Application {
         let Some(state) = &mut self.window_state else {
             return;
         };
-        // state.input(&event);
-        if !state.input(&event) {
+
+        // Handle input and updates first
+        let handled = state.input(&event);
+        if !handled {
             info!("input event not handled");
         }
         state.update();
-        match state.render() {
-            Ok(_) => {}
-            // Reconfigure the surface if it's lost or outdated
-            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                let size = state.window.inner_size();
-                state.resize(size);
-            },
-            // The system is out of memory, we should probably quit
-            Err(wgpu::SurfaceError::OutOfMemory) => {
-                log::error!("OutOfMemory");
-                // control_flow.exit();
-            }
 
-            // This happens when the a frame takes too long to present
-            Err(wgpu::SurfaceError::Timeout) => {
-                log::warn!("Surface timeout")
-            }
-        }
-            let WindowState {
-            window,
-            device,
-            queue,
-            surface,
-            surface_config,
-            font_system,
-            swash_cache,
-            viewport,
-            atlas,
-            text_renderer,
-            text_buffer,
-            chat_text,
-            render_pipeline,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
-            diffuse_bind_group,
-            diffuse_texture,
-            camera,
-            camera_controller,
-            camera_uniform,
-            camera_bind_group,
-            camera_buffer,
-            instances,
-            instance_buffer,
-            ..
-        } = state;
-        let chat_text = &mut state.chat_text;
-        //Will be used for command mapping
-        let mut key_table = vec![false; 255].into_boxed_slice();
-
-
+        // Handle window events
         match event {
-            //Todo refactor, this was for when enter was the only thing lol
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        state: ElementState::Pressed,
-                        physical_key: PhysicalKey::Code(KeyCode::KeyW),
-                        ..
-                    },
-                ..
-            } => {
-                camera_controller.process_events(&event);
-                let inputMode = true;
-                info!("hi hi hi");
-                console::write_to_console(text_buffer, font_system, chat_text, "hi");
-                window.request_redraw();
+            WindowEvent::Resized(physical_size) => {
+                state.resize(physical_size);
+                state.window.request_redraw();
             }
-            //Any key pressed
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        state: ElementState::Pressed,
-                        ..
-                    },
-                ..
-            } => {
-                camera_controller.process_events(&event);
+            WindowEvent::KeyboardInput { event: KeyEvent { state: ElementState::Pressed, physical_key, .. }, .. } => {
+                match physical_key {
+                    PhysicalKey::Code(KeyCode::KeyW) => {
+                        console::write_to_console(
+                            &mut state.text_buffer,
+                            &mut state.font_system,
+                            &mut state.chat_text,
+                            "hi",
+                        );
+                        state.window.request_redraw();
+                    }
+                    _ => {}
+                }
             }
-
-            WindowEvent::Resized(size) => {
-                surface_config.width = size.width;
-                surface_config.height = size.height;
-                surface.configure(&device, surface_config);
-                window.request_redraw();
-            }
-            
             WindowEvent::RedrawRequested => {
-                viewport.update(
-                    &queue,
+                // Update text rendering viewport
+                state.viewport.update(
+                    &state.queue,
                     Resolution {
-                        width: surface_config.width,
-                        height: surface_config.height,
+                        width: state.surface_config.width,
+                        height: state.surface_config.height,
                     },
                 );
-            text_renderer
-                .prepare(
-                    device, queue, font_system, atlas, viewport, 
-                    [TextArea {
-                        buffer: text_buffer,
-                        left: 10.0,
-                        top: 10.0,
-                        scale: 1.0,
-                        bounds: TextBounds {
-                            left: 0,
-                            top: 0,
-                            right: 600,
-                            bottom: 160
-                        },
-                        default_color: Color::rgb(255, 255, 255),
-                        custom_glyphs: &[],
-                    }],
-                    swash_cache,
-                ).unwrap();
-                
-                let frame = surface.get_current_texture().unwrap();
-                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-            frame.present();
 
-            atlas.trim();
+                // Prepare text rendering
+                let text_area = TextArea {
+                    buffer: &state.text_buffer,
+                    left: 10.0,
+                    top: 10.0,
+                    scale: 1.0,
+                    bounds: TextBounds {
+                        left: 0,
+                        top: 0,
+                        right: 600,
+                        bottom: 160
+                    },
+                    default_color: Color::rgb(255, 255, 255),
+                    custom_glyphs: &[],
+                };
+
+                state.text_renderer.prepare(
+                    &state.device,
+                    &state.queue,
+                    &mut state.font_system,
+                    &mut state.atlas,
+                    &state.viewport,
+                    [text_area],
+                    &mut state.swash_cache,
+                ).unwrap();
+
+                // Handle main rendering
+                match state.render() {
+                    Ok(_) => {}
+                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                        state.resize(state.window.inner_size());
+                    }
+                    Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
+                    Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
+                }
+
+                state.atlas.trim();
+            }
+            WindowEvent::CloseRequested => event_loop.exit(),
+            _ => {}
         }
-        WindowEvent::CloseRequested => event_loop.exit(), 
-        _ => {}
     }
-}
 }
