@@ -4,6 +4,7 @@ mod cameracontroller;
 mod vertex;
 mod camera;
 mod window_state;
+mod model; // Add this line
 
 use crate::window_state::WindowState;
 use std::sync::{Arc, Once};

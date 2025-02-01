@@ -1,6 +1,7 @@
 use crate::camera::{Camera, CameraUniform};
 use crate::texture;
 use crate::vertex::{Vertex, Instanced, InstanceRaw};
+use crate::model::ModelVertex; // Ensure this line is present
 use cgmath::{InnerSpace, Rotation3, Zero};
 use glyphon::{Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
 use wgpu::util::RenderEncoder;
@@ -10,6 +11,7 @@ use std::sync::Arc;
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, CompositeAlphaMode, DeviceDescriptor, Instance, InstanceDescriptor, LoadOp, MultisampleState, Operations, PresentMode, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::window::Window;
 use crate::cameracontroller::CameraController;
+
 use std::iter;
 //Skybox
 // const VERTICES: &[Vertex] = &[
@@ -300,6 +302,7 @@ impl WindowState {
                 buffers: &[
                     Vertex::desc(),
                     InstanceRaw::desc(),
+                    ModelVertex::desc(),
                 ],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
