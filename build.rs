@@ -26,5 +26,15 @@ fn main() -> Result<()> {
     // create_all(&out_dir, false)?;
     // copy_items(&paths_to_copy, out_dir, &copy_options)?;
 
+    // Copy the items to the directory where they will be hosted
+    // - The out_dir will likely be different in your project
+    // let out_dir = std::path::Path::new(&env::var("CARGO_MANIFEST_DIR")?)
+    //     .parent().unwrap()
+    //     .parent().unwrap()
+    //     .parent().unwrap()
+    //     .join("docs/.vuepress/public/res/tutorial9-models");
+    // create_all(&out_dir, false)?;
+    // copy_items(&paths_to_copy, out_dir, &copy_options)?;
+
     Ok(())
 }

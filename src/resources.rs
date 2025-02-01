@@ -30,24 +30,32 @@ pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
             let path = std::path::Path::new(env!("OUT_DIR"))
                 .join("res")
                 .join(file_name);
-            let txt = std::fs::read_to_string(path)?;
+            info!("Loading string from path: {:?}", path);
+            let txt = std::fs::read_to_string(&path)
+                .map_err(|e| anyhow::anyhow!("Failed to read file {:?}: {:?}", path, e))?;
             Ok(txt)
-
         }
     }
-
 }
-
 
 pub async fn load_texture(
     file_name: &str,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
 ) -> anyhow::Result<texture::Texture> {
-    let data = load_binary(file_name).await?.into_boxed_slice();
-    texture::Texture::from_bytes(device, queue, &data, file_name)
+    match load_binary(file_name).await {
+        Ok(data) => {
+            let data = data.into_boxed_slice();
+            texture::Texture::from_bytes(device, queue, &data, file_name)
+        }
+        Err(e) => {
+            log::warn!("Failed to load texture '{}': {:?}. Falling back to default texture.", file_name, e);
+            let default_texture_path = "empty.png";
+            let data = load_binary(default_texture_path).await?.into_boxed_slice();
+            texture::Texture::from_bytes(device, queue, &data, default_texture_path)
+        }
+    }
 }
-
 
 pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
     cfg_if! {
@@ -63,14 +71,13 @@ pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
             let path = std::path::Path::new(env!("OUT_DIR"))
                 .join("res")
                 .join(file_name);
-            let data = std::fs::read(path)?;
+            info!("Loading binary from path: {:?}", path);
+            let data = std::fs::read(&path)
+                .map_err(|e| anyhow::anyhow!("Failed to read file {:?}: {:?}", path, e))?;
             Ok(data)
         }
     }
-
 }
-
-
 
 pub async fn load_model(
     file_name: &str,

@@ -11,7 +11,7 @@
             "cargo": {
                 "args": [
                     "build",
-                    "--lib"
+                    "--bin=WGPU-Sandbox"
                 ]
             },
             "args": []
