@@ -15,6 +15,7 @@ dependencies = [
  "env_logger",
  "etagere",
  "fs_extra",
+ "glob",
  "glyphon",
  "image",
  "log",
@@ -24,6 +25,7 @@ dependencies = [
  "resvg",
  "rustc-hash 2.1.0",
  "tobj",
+ "web-sys",
  "wgpu",
  "winit",
 ]
@@ -935,6 +937,12 @@ dependencies = [
  "log",
  "xml-rs",
 ]
+
+[[package]]
+name = "glob"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
 
 [[package]]
 name = "glow"

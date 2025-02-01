@@ -1,6 +1,7 @@
 use std::{io::{BufReader, Cursor}, ops::Range};
 use cfg_if::cfg_if;
 use wgpu::util::DeviceExt;
+use log::info;
 
 use crate::{model::{self, Mesh}, texture};
 
@@ -43,7 +44,7 @@ pub async fn load_texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
 ) -> anyhow::Result<texture::Texture> {
-    let data = load_binary(file_name).await?;
+    let data = load_binary(file_name).await?.into_boxed_slice();
     texture::Texture::from_bytes(device, queue, &data, file_name)
 }
 
@@ -80,6 +81,10 @@ pub async fn load_model(
     let obj_text = load_string(file_name).await?;
     let obj_cursor = Cursor::new(obj_text);
     let mut obj_reader = BufReader::new(obj_cursor);
+
+    // Log the contents of the folder
+    let path = std::path::Path::new(env!("OUT_DIR")).join("res");
+    info!("Contents of the folder: {:?}", std::fs::read_dir(&path)?.collect::<Vec<_>>());
 
     let (models, obj_materials) = tobj::load_obj_buf_async(
         &mut obj_reader,

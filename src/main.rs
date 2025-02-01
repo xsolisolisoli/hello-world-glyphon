@@ -17,7 +17,6 @@ use winit::{
     window::Window,
 };
 use log::info;
-use fs_extra
 use env_logger::Env;
 use glyphon::{Attrs, Buffer, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextBounds};
 use anyhow::*;

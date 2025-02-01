@@ -223,20 +223,16 @@ impl WindowState {
             });
 
         let obj_model =
-        resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
+        resources::load_model("WIGhat.obj", &device, &queue, &texture_bind_group_layout)
             .await
             .unwrap();
-        
-        resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
-        .await
-        .unwrap();
     
 
         let surface_config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format: swapchain_format,
             width: physical_size.width,
-            height: physical_size.height,
+            height: physical_size.height,       
             present_mode: PresentMode::Fifo,
             alpha_mode: CompositeAlphaMode::Opaque,
             view_formats: vec![],

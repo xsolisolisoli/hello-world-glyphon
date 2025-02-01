@@ -19,15 +19,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'hello-world-glyphon'",
+            "name": "Debug executable 'WGPU-Sandbox'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=hello-world-glyphon",
-                    "--package=hello-world-glyphon"
+                    "--bin=WGPU-Sandbox",
+                    "--package=WGPU-Sandbox"
                 ],
                 "filter": {
-                    "name": "hello-world-glyphon",
+                    "name": "WGPU-Sandbox",
                     "kind": "bin"
                 }
             },
@@ -37,16 +37,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'hello-world-glyphon'",
+            "name": "Debug unit tests in executable 'WGPU-Sandbox'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=hello-world-glyphon",
-                    "--package=hello-world-glyphon"
+                    "--bin=WGPU-Sandbox",
+                    "--package=WGPU-Sandbox"
                 ],
                 "filter": {
-                    "name": "hello-world-glyphon",
+                    "name": "WGPU-Sandbox",
                     "kind": "bin"
                 }
             },
@@ -62,7 +62,7 @@
                     "test",
                     "--no-run",
                     "--bench=prepare",
-                    "--package=hello-world-glyphon"
+                    "--package=WGPU-Sandbox"
                 ],
                 "filter": {
                     "name": "prepare",
