@@ -4,7 +4,8 @@ mod cameracontroller;
 mod vertex;
 mod camera;
 mod window_state;
-mod model; // Add this line
+mod model;
+mod resources;
 
 use crate::window_state::WindowState;
 use std::sync::{Arc, Once};
@@ -16,12 +17,16 @@ use winit::{
     window::Window,
 };
 use log::info;
+use fs_extra
 use env_logger::Env;
 use glyphon::{Attrs, Buffer, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextBounds};
+use anyhow::*;
+use std::env;
 
 static INIT: Once = Once::new();
 
 fn main() {
+
     INIT.call_once(|| {
         env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     });
@@ -135,13 +140,14 @@ impl winit::application::ApplicationHandler for Application {
                     ).unwrap();
     
                     // Handle main rendering
-                    match state.render() {
-                        Ok(_) => {}
-                        Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                            state.resize(state.window.inner_size());
+                    if let Err(e) = state.render() {
+                        match e {
+                            wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated => {
+                                state.resize(state.window.inner_size());
+                            }
+                            wgpu::SurfaceError::OutOfMemory => event_loop.exit(),
+                            wgpu::SurfaceError::Timeout => log::warn!("Surface timeout"),
                         }
-                        Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
-                        Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
                     }
     
                     state.atlas.trim();

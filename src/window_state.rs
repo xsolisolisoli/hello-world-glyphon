@@ -1,7 +1,8 @@
 use crate::camera::{Camera, CameraUniform};
-use crate::texture;
+use crate::resources::DrawModel;
+use crate::{resources, texture};
 use crate::vertex::{Vertex, Instanced, InstanceRaw};
-use crate::model::ModelVertex; // Ensure this line is present
+use crate::model::{Model, ModelVertex}; // Ensure this line is present
 use cgmath::{InnerSpace, Rotation3, Zero};
 use glyphon::{Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
 use wgpu::util::RenderEncoder;
@@ -105,31 +106,54 @@ pub struct WindowState {
     pub diffuse_bind_group: wgpu::BindGroup,
     pub diffuse_texture: crate::texture::Texture,
     depth_texture: texture::Texture,
+    pub obj_model: Model
+    
 }
 impl WindowState {
     pub async fn new(window: Arc<Window>) -> Self {
         let physical_size = window.inner_size();
         let scale_factor = window.scale_factor();
 
-
         //Instance code
+        // let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
+        //     (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+        //         let position = cgmath::Vector3 { x: x as f32, y: 0.0, z: z as f32 } - INSTANCE_DISPLACEMENT;
+
+        //         let rotation = if position.is_zero() {
+        //             // this is needed so an object at (0, 0, 0) won't get scaled to zero
+        //             // as Quaternions can affect scale if they're not created correctly
+        //             cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
+        //         } else {
+        //             cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+        //         };
+
+        //         Instanced {
+        //             position, rotation,
+        //         }
+        //     })
+        // }).collect::<Vec<_>>();
+        const SPACE_BETWEEN: f32 = 3.0;
         let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
             (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                let position = cgmath::Vector3 { x: x as f32, y: 0.0, z: z as f32 } - INSTANCE_DISPLACEMENT;
-
+                let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+        
+                let position = cgmath::Vector3 { x, y: 0.0, z };
+        
                 let rotation = if position.is_zero() {
-                    // this is needed so an object at (0, 0, 0) won't get scaled to zero
-                    // as Quaternions can affect scale if they're not created correctly
                     cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
                 } else {
                     cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
                 };
-
+        
                 Instanced {
-                    position, rotation,
+                    position,
+                    rotation,
                 }
             })
         }).collect::<Vec<_>>();
+        
+        
 
         let instance = Instance::new(InstanceDescriptor::default());
         let adapter = instance
@@ -198,6 +222,14 @@ impl WindowState {
                 label: Some("texture_bind_group_layout"),
             });
 
+        let obj_model =
+        resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
+            .await
+            .unwrap();
+        
+        resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
+        .await
+        .unwrap();
     
 
         let surface_config = SurfaceConfiguration {
@@ -426,6 +458,7 @@ impl WindowState {
             diffuse_bind_group,
             diffuse_texture,
             instances,
+            obj_model,
             depth_texture,
             instance_buffer
             }
@@ -512,6 +545,7 @@ impl WindowState {
 
                 // render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                 render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as _);
+                render_pass.draw_mesh_instanced(&self.obj_model.meshes[0], 0..self.instances.len() as u32);
                 &self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
 
             }
