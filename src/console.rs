@@ -1,5 +1,10 @@
 use glyphon::{Attrs, Buffer, Family, FontSystem, Shaping};
 use log::info;
+use winit::event::WindowEvent;
+
+pub fn process_events(event: WindowEvent, text_buffer: &mut Buffer, font_system: &mut FontSystem, chat_text: &mut String, new_text: &str) {
+    
+}
 
 pub fn write_to_console(text_buffer: &mut Buffer, font_system: &mut FontSystem, chat_text: &mut String, new_text: &str) {
     info!("Writing to console: {}", new_text);

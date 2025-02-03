@@ -7,6 +7,7 @@ edition = "2021"
 #Should be in build dep 
 anyhow = "1.0"
 fs_extra = "1.2"
+reqwest = { version = "0.11", features = ["json"] }
 # glob = "0.3"
 ############
 cfg-if = "1.0"
@@ -26,7 +27,6 @@ tobj = { version = "3.2", default-features = false, features = ["async"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # Other dependencies
-reqwest = { version = "0.11" }
 web-sys = { version = "0.3", features = [
     "Document",
     "Window",

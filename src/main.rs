@@ -6,6 +6,9 @@ mod camera;
 mod window_state;
 mod model;
 mod resources;
+mod common {
+    pub mod utils;
+}
 
 use crate::window_state::WindowState;
 use std::sync::{Arc, Once};

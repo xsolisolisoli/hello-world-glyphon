@@ -2,7 +2,7 @@ use std::{io::{BufReader, Cursor}, ops::Range};
 use cfg_if::cfg_if;
 use wgpu::util::DeviceExt;
 use log::info;
-
+use crate::common::utils::IsNullOrEmpty;
 use crate::{model::{self, Mesh}, texture};
 
 #[cfg(target_arch = "wasm32")]
@@ -49,10 +49,41 @@ pub async fn load_texture(
             texture::Texture::from_bytes(device, queue, &data, file_name)
         }
         Err(e) => {
-            log::warn!("Failed to load texture '{}': {:?}. Falling back to default texture.", file_name, e);
-            let default_texture_path = "empty.png";
-            let data = load_binary(default_texture_path).await?.into_boxed_slice();
-            texture::Texture::from_bytes(device, queue, &data, default_texture_path)
+            // Check if the error is a "file not found" or HTTP 404
+            let is_not_found = e.downcast_ref::<std::io::Error>()
+                .map(|io_err| io_err.kind() == std::io::ErrorKind::NotFound)
+                .unwrap_or_else(|| {
+                    // For WASM, check if it's a 404 error
+                    if cfg!(target_arch = "wasm32") {
+                        //Todo decide if request code should be moved under wasm decorator
+                        e.downcast_ref::<reqwest::Error>()
+                            .and_then(|req_err| req_err.status())
+                            .map(|status| status == reqwest::StatusCode::NOT_FOUND)
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    }
+                });
+
+            if is_not_found {
+                info!("Texture '{}' not found, using default white texture", file_name);
+                // Safe to unwrap if [0xFF; 4] is always a valid 1x1 texture
+                texture::Texture::from_bytes(
+                    device, 
+                    queue, 
+                    &[0xFF, 0xFF, 0xFF, 0xFF], 
+                    "white"
+                ).map_err(|err| {
+                    anyhow::anyhow!(
+                        "BUG: Failed to create white fallback texture: {:?}", 
+                        err
+                    )
+                })
+            } else {
+                // Propagate other errors (e.g., permissions, network issues)
+                info!("Error loading texture '{}': {:?}", file_name, e);
+                Err(e)
+            }
         }
     }
 }
@@ -61,20 +92,33 @@ pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
     cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             let url = format_url(file_name);
-            let data = reqwest::get(url)
-                .await?
-                .bytes()
-                .await?
-                .to_vec();
-            Ok(data)
+            let response = reqwest::get(url).await?;
+            
+            // Handle HTTP errors explicitly
+            if response.status().is_success() {
+                let data = response.bytes().await?.to_vec();
+                Ok(data)
+            } else {
+                Err(anyhow::anyhow!(
+                    "HTTP error {} for {}", 
+                    response.status(), 
+                    file_name
+                ))
+            }
         } else {
             let path = std::path::Path::new(env!("OUT_DIR"))
                 .join("res")
                 .join(file_name);
             info!("Loading binary from path: {:?}", path);
-            let data = std::fs::read(&path)
-                .map_err(|e| anyhow::anyhow!("Failed to read file {:?}: {:?}", path, e))?;
-            Ok(data)
+            
+            std::fs::read(&path)
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to read file {:?}: {}", 
+                        path, 
+                        e
+                    )
+                })
         }
     }
 }

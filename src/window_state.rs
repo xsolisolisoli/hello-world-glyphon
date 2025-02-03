@@ -3,6 +3,7 @@ use crate::resources::DrawModel;
 use crate::{resources, texture};
 use crate::vertex::{Vertex, Instanced, InstanceRaw};
 use crate::model::{Model, ModelVertex}; // Ensure this line is present
+use crate::common::utils::IsNullOrEmpty; // Add this line
 use cgmath::{InnerSpace, Rotation3, Zero};
 use glyphon::{Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
 use wgpu::util::RenderEncoder;
@@ -114,6 +115,7 @@ impl WindowState {
         let physical_size = window.inner_size();
         let scale_factor = window.scale_factor();
 
+
         //Instance code
         // let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
         //     (0..NUM_INSTANCES_PER_ROW).map(move |x| {
@@ -183,7 +185,7 @@ impl WindowState {
         //Render Pipeline
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
         });
 
         let instance_data = instances.iter().map(Instanced::to_raw).collect::<Vec<_>>();
@@ -481,6 +483,7 @@ impl WindowState {
 
         pub fn input(&mut self, event: &WindowEvent) -> bool {
             self.camera_controller.process_events(event)
+
         }
         pub fn update(&mut self) {
             self.camera_controller.update_camera(&mut self.camera);
