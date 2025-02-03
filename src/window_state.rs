@@ -1,8 +1,8 @@
 use crate::camera::{Camera, CameraUniform};
 use crate::resources::DrawModel;
-use crate::{resources, texture};
-use crate::vertex::{Vertex, Instanced, InstanceRaw};
-use crate::model::{Model, ModelVertex}; // Ensure this line is present
+use crate::{model, resources, texture};
+use crate::vertex::{Instanced, InstanceRaw};
+use crate::model::{Model, ModelVertex, Vertex}; // Ensure this line is present
 use crate::common::utils::IsNullOrEmpty; // Add this line
 use cgmath::{InnerSpace, Rotation3, Zero};
 use glyphon::{Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
@@ -48,32 +48,32 @@ use std::iter;
 //     Vertex { position: [-0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], },
 //     Vertex { position: [-0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], },
 // ];
-const VERTICES: &[Vertex] = &[
-    Vertex {
-        position: [-0.0868241, 0.49240386, 0.0],
-        tex_coords: [0.4131759, 0.00759614],
-    }, // A
-    Vertex {
-        position: [-0.49513406, 0.06958647, 0.0],
-        tex_coords: [0.0048659444, 0.43041354],
-    }, // B
-    Vertex {
-        position: [-0.21918549, -0.44939706, 0.0],
-        tex_coords: [0.28081453, 0.949397],
-    }, // C
-    Vertex {
-        position: [0.35966998, -0.3473291, 0.0],
-        tex_coords: [0.85967, 0.84732914],
-    }, // D
-    Vertex {
-        position: [0.44147372, 0.2347359, 0.0],
-        tex_coords: [0.9414737, 0.2652641],
-    }, // E
-];
+// const VERTICES: &[Vertex] = &[
+//     Vertex {
+//         position: [-0.0868241, 0.49240386, 0.0],
+//         tex_coords: [0.4131759, 0.00759614],
+//     }, // A
+//     Vertex {
+//         position: [-0.49513406, 0.06958647, 0.0],
+//         tex_coords: [0.0048659444, 0.43041354],
+//     }, // B
+//     Vertex {
+//         position: [-0.21918549, -0.44939706, 0.0],
+//         tex_coords: [0.28081453, 0.949397],
+//     }, // C
+//     Vertex {
+//         position: [0.35966998, -0.3473291, 0.0],
+//         tex_coords: [0.85967, 0.84732914],
+//     }, // D
+//     Vertex {
+//         position: [0.44147372, 0.2347359, 0.0],
+//         tex_coords: [0.9414737, 0.2652641],
+//     }, // E
+// ];
 
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
 
-const NUM_INSTANCES_PER_ROW: u32 = 10;
+const NUM_INSTANCES_PER_ROW: u32 = 5;
 const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
     NUM_INSTANCES_PER_ROW as f32 * 0.5,
     0.0,
@@ -95,7 +95,7 @@ pub struct WindowState {
     pub text_buffer: Buffer,
     pub chat_text: String,
     pub render_pipeline: wgpu::RenderPipeline,
-    pub vertex_buffer: wgpu::Buffer,
+    // pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
     pub window: Arc<Window>,
@@ -166,13 +166,13 @@ impl WindowState {
 
         let surface = instance.create_surface(window.clone()).expect("Create Surface");
 
-        let vertex_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(VERTICES),
-                usage: wgpu::BufferUsages::VERTEX,
-            }
-        );
+        // let vertex_buffer = device.create_buffer_init(
+        //     &wgpu::util::BufferInitDescriptor {
+        //         label: Some("Vertex Buffer"),
+        //         contents: bytemuck::cast_slice(VERTICES),
+        //         usage: wgpu::BufferUsages::VERTEX,
+        //     }
+        // );
         let index_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Index Buffer"),
@@ -181,7 +181,7 @@ impl WindowState {
             }
         );
         let num_indices = INDICES.len() as u32;
-        let num_vertices = VERTICES.len() as u32;
+        // let num_vertices = VERTICES.len() as u32;
         //Render Pipeline
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -330,9 +330,8 @@ impl WindowState {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 buffers: &[
-                    Vertex::desc(),
                     InstanceRaw::desc(),
-                    ModelVertex::desc(),
+                    model::ModelVertex::desc(),
                 ],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
@@ -444,7 +443,7 @@ impl WindowState {
             text_buffer,
             chat_text,
             render_pipeline,
-            vertex_buffer,
+            // vertex_buffer,
             index_buffer,
             num_indices,
             window,
@@ -534,17 +533,9 @@ impl WindowState {
                     timestamp_writes: None,
                 });
     
-                render_pass.set_pipeline(&self.render_pipeline);
-                render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-
                 render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-                render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-
-                // render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as _);
-                render_pass.draw_mesh_instanced(&self.obj_model.meshes[0], 0..self.instances.len() as u32);
+                render_pass.set_pipeline(&self.render_pipeline);
+                crate::model::DrawModel::draw_model_instanced(&mut render_pass, &self.obj_model, 0..self.instances.len() as u32, &self.camera_bind_group);
                 &self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
 
             }
