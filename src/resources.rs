@@ -89,9 +89,16 @@ pub async fn load_texture(
 }
 
 pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
+    let mut file = file_name.to_string();
+    if file_name.is_empty() {
+        file = "empty.png".to_owned();
+    }
+    else {
+        file = file_name.to_owned();
+    }
     cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
-            let url = format_url(file_name);
+            let url = format_url(file);
             let response = reqwest::get(url).await?;
             
             // Handle HTTP errors explicitly
@@ -108,7 +115,7 @@ pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
         } else {
             let path = std::path::Path::new(env!("OUT_DIR"))
                 .join("res")
-                .join(file_name);
+                .join(file);
             info!("Loading binary from path: {:?}", path);
             
             std::fs::read(&path)
