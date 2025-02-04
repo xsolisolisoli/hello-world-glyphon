@@ -1,8 +1,7 @@
 use crate::camera::{Camera, CameraUniform};
-use crate::resources::DrawModel;
 use crate::{model, resources, texture};
 use crate::vertex::{Instanced, InstanceRaw};
-use crate::model::{Model, ModelVertex, Vertex}; // Ensure this line is present
+use crate::model::{DrawModel, Model, ModelVertex, Vertex}; // Ensure this line is present
 use crate::common::utils::IsNullOrEmpty; // Add this line
 use cgmath::{InnerSpace, Rotation3, Zero};
 use glyphon::{Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
@@ -134,27 +133,6 @@ impl WindowState {
         //         }
         //     })
         // }).collect::<Vec<_>>();
-        const SPACE_BETWEEN: f32 = 3.0;
-        let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
-            (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-        
-                let position = cgmath::Vector3 { x, y: 0.0, z };
-        
-                let rotation = if position.is_zero() {
-                    cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
-                } else {
-                    cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                };
-        
-                Instanced {
-                    position,
-                    rotation,
-                }
-            })
-        }).collect::<Vec<_>>();
-        
         
 
         let instance = Instance::new(InstanceDescriptor::default());
@@ -187,6 +165,36 @@ impl WindowState {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
         });
+        const SPACE_BETWEEN: f32 = 3.0;
+        let instances = (0..NUM_INSTANCES_PER_ROW)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+
+                    let position = cgmath::Vector3 { x, y: 0.0, z };
+
+                    let rotation = if position.is_zero() {
+                        cgmath::Quaternion::from_axis_angle(
+                            cgmath::Vector3::unit_z(),
+                            cgmath::Deg(0.0),
+                        )
+                    } else {
+                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                    };
+
+                    Instanced { position, rotation }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let instance_data = instances.iter().map(Instanced::to_raw).collect::<Vec<_>>();
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
 
         let instance_data = instances.iter().map(Instanced::to_raw).collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(
@@ -329,35 +337,38 @@ impl WindowState {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[
-                    InstanceRaw::desc(),
-                    model::ModelVertex::desc(),
-                ],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[model::ModelVertex::desc(), InstanceRaw::desc()],
+                compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: swapchain_format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    format: surface_config.format,
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent::REPLACE,
+                        alpha: wgpu::BlendComponent::REPLACE,
+                    }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
+                // Setting this to anything other than Fill requires Features::POLYGON_MODE_LINE
+                // or Features::POLYGON_MODE_POINT
                 polygon_mode: wgpu::PolygonMode::Fill,
+                // Requires Features::DEPTH_CLIP_CONTROL
                 unclipped_depth: false,
+                // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: texture::Texture::DEPTH_FORMAT,
                 depth_write_enabled: true,
-                //Todo test other comparefunction values
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
@@ -367,9 +378,13 @@ impl WindowState {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
+            // If the pipeline will be used with a multiview render pass, this
+            // indicates how many array layers the attachments will have.
             multiview: None,
+            // Useful for optimizing shader compilation on Android
             cache: None,
         });
+
         
 
          
@@ -535,7 +550,10 @@ impl WindowState {
     
                 render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
                 render_pass.set_pipeline(&self.render_pipeline);
-                crate::model::DrawModel::draw_model_instanced(&mut render_pass, &self.obj_model, 0..self.instances.len() as u32, &self.camera_bind_group);
+                render_pass.draw_model_instanced(
+                    &self.obj_model,
+                    0..self.instances.len() as u32,
+                    &self.camera_bind_group);
                 &self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
 
             }
