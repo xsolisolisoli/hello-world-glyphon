@@ -563,6 +563,7 @@ impl WindowState {
                     &self.light_bind_group,
                 );
                 render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_bind_group(2, &self.light_bind_group, &[]); 
                 render_pass.draw_model_instanced(
                     &self.obj_model,
                     0..self.instances.len() as u32,
