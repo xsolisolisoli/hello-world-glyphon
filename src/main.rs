@@ -5,6 +5,8 @@ mod vertex;
 mod camera;
 mod window_state;
 mod model;
+mod rendering;
+mod light;
 mod resources;
 mod common {
     pub mod utils;
