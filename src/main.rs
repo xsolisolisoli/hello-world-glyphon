@@ -4,6 +4,7 @@ mod cameracontroller;
 mod vertex;
 mod camera;
 mod window_state;
+use std::{f32::consts::FRAC_PI_2, time::Instant};
 mod model;
 mod rendering;
 mod light;
@@ -30,6 +31,7 @@ use std::env;
 static INIT: Once = Once::new();
 
 fn main() {
+    let mut last_render_time = Instant::now();  
 
     INIT.call_once(|| {
         env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
@@ -69,6 +71,8 @@ impl winit::application::ApplicationHandler for Application {
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
+        let mut last_render_time = Instant::now();
+
         let Some(state) = &mut self.window_state else {
             return;
         };
@@ -106,6 +110,11 @@ impl winit::application::ApplicationHandler for Application {
                     }
                 }
                 WindowEvent::RedrawRequested => {
+                    let now = Instant::now();
+                    let dt = now - last_render_time;
+                    last_render_time = now;
+                    state.update(dt);
+
                     state.window.request_redraw();
                     // Update text rendering viewport
                     state.viewport.update(
@@ -115,7 +124,6 @@ impl winit::application::ApplicationHandler for Application {
                             height: state.surface_config.height,
                         },
                     );
-                    state.update();
 
                     // Prepare text rendering
                     let text_area = TextArea {

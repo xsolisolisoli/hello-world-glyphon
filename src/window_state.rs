@@ -1,4 +1,4 @@
-use crate::camera::{Camera, CameraUniform};
+use crate::camera::{self, Camera, CameraUniform};
 use crate::{light, model, resources, texture, rendering};
 use crate::vertex::{Instanced, InstanceRaw};
 use crate::model::{DrawLight, DrawModel, Model, ModelVertex, Vertex}; // Ensure this line is present
@@ -6,9 +6,12 @@ use crate::common::utils::IsNullOrEmpty; // Add this line
 use cgmath::{InnerSpace, Rotation3, Zero};
 use glyphon::{Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
 use wgpu::util::RenderEncoder;
-use winit::event::WindowEvent;
+use instant::Duration;
+use winit::event::{ElementState, Event, KeyEvent, MouseButton, WindowEvent};
+use winit::keyboard::PhysicalKey;
 use std::collections::btree_map::Range;
 use std::sync::Arc;
+use std::time::Instant;
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, CompositeAlphaMode, DeviceDescriptor, Instance, InstanceDescriptor, LoadOp, MultisampleState, Operations, PresentMode, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::window::Window;
 use crate::cameracontroller::CameraController;
@@ -111,8 +114,9 @@ pub struct WindowState {
     light_bind_group_layout: wgpu::BindGroupLayout,
     light_bind_group: wgpu::BindGroup,
     light_render_pipeline: wgpu::RenderPipeline,
-    pub obj_model: Model
-    
+    pub obj_model: Model,
+    mouse_pressed: bool,
+    projection: camera::Projection,    
 }
 impl WindowState {
     pub async fn new(window: Arc<Window>) -> Self {
@@ -267,19 +271,13 @@ impl WindowState {
 
 
         //CAMERA
-        let camera = Camera {
-            eye:(0.0, 1.0, 2.0).into(),
-            target: (0.0, 0.0, 0.0).into(),
-            up: cgmath::Vector3::unit_y(),
-            aspect: surface_config.width as f32 / surface_config.height as f32,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
-        };
-        let camera_controller = CameraController::new(0.2);
+        let camera = camera::Camera::new((0.0, 5.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+        let projection = camera::Projection::new(surface_config.width, surface_config.height, cgmath::Deg(45.0), 0.1, 100.0);
+        let camera_controller = CameraController::new(4.0, 0.4);
 
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
+        camera_uniform.update_view_proj(&camera, &projection);
+
         let camera_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Camera Buffer"),
@@ -292,7 +290,7 @@ impl WindowState {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -455,7 +453,6 @@ impl WindowState {
             text_buffer,
             chat_text,
             render_pipeline,
-            // vertex_buffer,
             index_buffer,
             num_indices,
             window,
@@ -474,107 +471,134 @@ impl WindowState {
             light_bind_group_layout,
             light_render_pipeline,
             depth_texture,
-            instance_buffer
-            }
-        }
-
-        pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-            if new_size.width > 0 && new_size.height > 0 {
-                // Update surface configuration
-                self.surface_config.width = new_size.width;
-                self.surface_config.height = new_size.height;
-                self.surface.configure(&self.device, &self.surface_config);
-        
-                // Recreate depth texture with the new size
-                self.depth_texture.resize(
-                    &self.device,
-                    self.surface_config.width,
-                    self.surface_config.height,
-                );
-        
-                // Update camera aspect ratio
-                self.camera.aspect = self.surface_config.width as f32 / self.surface_config.height as f32;
-            }
-        }
-
-        pub fn input(&mut self, event: &WindowEvent) -> bool {
-            self.camera_controller.process_events(event)
-
-        }
-        pub fn update(&mut self) {
-            let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
-            self.light_uniform.position = (cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), 
-                cgmath::Deg(1.0)) * old_position).into();
-            self.queue.write_buffer(&self.light_buffer, 0, bytemuck::cast_slice(&[self.light_uniform]));
-
-            self.camera_controller.update_camera(&mut self.camera);
-            self.camera_uniform.update_view_proj(&self.camera);
-            self.queue.write_buffer(
-                &self.camera_buffer,
-                0,
-                bytemuck::cast_slice(&[self.camera_uniform]),
-            );
-        }
-        pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-            let output = self.surface.get_current_texture()?;
-            let view = output
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
-    
-            let mut encoder = self
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Render Encoder"),
-                });
-    
-            {
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Render Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.1,
-                                g: 0.2,
-                                b: 0.3,
-                                a: 1.0,
-                            }),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &self.depth_texture.view,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(1.0),
-                            store: wgpu::StoreOp::Store,
-                        }),
-                        stencil_ops: None,
-                    }),
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                });
-    
-                render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-                render_pass.set_pipeline(&self.light_render_pipeline);
-                render_pass.draw_light_model(
-                    &self.obj_model,
-                    &self.camera_bind_group,
-                    &self.light_bind_group,
-                );
-                render_pass.set_pipeline(&self.render_pipeline);
-                render_pass.set_bind_group(2, &self.light_bind_group, &[]); 
-                render_pass.draw_model_instanced(
-                    &self.obj_model,
-                    0..self.instances.len() as u32,
-                    &self.camera_bind_group,
-                    &self.light_bind_group,
-                );
-                &self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
-
-            }
-            self.queue.submit(iter::once(encoder.finish()));
-            output.present();
-            Ok(())
+            instance_buffer,
+            projection,
+            mouse_pressed: false,
         }
     }
+
+    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        if new_size.width > 0 && new_size.height > 0 {
+            // Update surface configuration
+            self.surface_config.width = new_size.width;
+            self.surface_config.height = new_size.height;
+            self.surface.configure(&self.device, &self.surface_config);
+            self.projection.resize(new_size.width, new_size.height);
+            // Recreate depth texture with the new size
+            self.depth_texture.resize(
+                &self.device,
+                self.surface_config.width,
+                self.surface_config.height,
+            );
+    
+            // Update camera aspect ratio
+            // self.camera.aspect = self.surface_config.width as f32 / self.surface_config.height as f32;
+        }
+    }
+
+    pub fn input(&mut self, event: &WindowEvent) -> bool {
+        match event {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(key),
+                        state,
+                        ..
+                    },
+                ..
+            } => self.camera_controller.process_keyboard(*key, *state),
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.camera_controller.process_scroll(delta);
+                true
+            }
+            WindowEvent::MouseInput {
+                button: MouseButton::Left,
+                state,
+                ..
+            } => {
+                self.mouse_pressed = *state == ElementState::Pressed;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn update(&mut self, dt: instant::Duration) {
+        let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
+        self.light_uniform.position =
+        (cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), cgmath::Deg(60.0 * dt.as_secs_f32()))
+        * old_position).into(); // UPDATED!
+    
+        self.queue.write_buffer(&self.light_buffer, 0, bytemuck::cast_slice(&[self.light_uniform]));
+
+        self.camera_controller.update_camera(&mut self.camera, dt);
+        self.camera_uniform.update_view_proj(&self.camera, &self.projection);
+        self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[self.camera_uniform]),
+        );
+    }
+    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        let output = self.surface.get_current_texture()?;
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+
+            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            render_pass.set_pipeline(&self.light_render_pipeline);
+            render_pass.draw_light_model(
+                &self.obj_model,
+                &self.camera_bind_group,
+                &self.light_bind_group,
+            );
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(2, &self.light_bind_group, &[]); 
+            render_pass.draw_model_instanced(
+                &self.obj_model,
+                0..self.instances.len() as u32,
+                &self.camera_bind_group,
+                &self.light_bind_group,
+            );
+            &self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
+
+        }
+        self.queue.submit(iter::once(encoder.finish()));
+        output.present();
+        Ok(())
+    }
+}
