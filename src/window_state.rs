@@ -184,20 +184,22 @@ impl WindowState {
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             }
         );
-        let light_bind_group_layout = 
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
+        let light_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Light Bind Group Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty : wgpu::BindingType::Buffer {
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
-                }],
-                label: None,
-            });
+                },
+            ],
+        });
+
         let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &light_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
@@ -336,11 +338,16 @@ impl WindowState {
             }
         );
     
-        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout, &light_bind_group_layout],            
-            push_constant_ranges: &[],
-        });
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render Pipeline Layout"),
+                bind_group_layouts: &[
+                    &texture_bind_group_layout,
+                    &camera_bind_group_layout,
+                    &light_bind_group_layout,
+                ],
+                push_constant_ranges: &[],
+            });
 
         let render_pipeline = {
             let shader = wgpu::ShaderModuleDescriptor {
@@ -356,25 +363,25 @@ impl WindowState {
                 shader,
             )
         };
-        let light_render_pipeline = {
-            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Light Pipeline Layout"),
-                bind_group_layouts: &[&camera_bind_group_layout, &light_bind_group_layout],
-                push_constant_ranges: &[],
-            });
-            let shader = wgpu::ShaderModuleDescriptor {
-                label: Some("Light Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("shaders/light.wgsl").into()),
-            };
-            rendering::create_render_pipeline(
-                &device,
-                &layout,
-                surface_config.format,
-                Some(texture::Texture::DEPTH_FORMAT),
-                &[model::ModelVertex::desc()],
-                shader,
-            )
+    let light_render_pipeline = {
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Light Pipeline Layout"),
+            bind_group_layouts: &[&camera_bind_group_layout, &light_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+        let shader = wgpu::ShaderModuleDescriptor {
+            label: Some("Light Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/light.wgsl").into()),
         };
+        rendering::create_render_pipeline(
+            &device,
+            &layout,
+            surface_config.format,
+            Some(texture::Texture::DEPTH_FORMAT),
+            &[model::ModelVertex::desc()],
+            shader,
+        )
+    };
         
 
          
@@ -549,10 +556,12 @@ impl WindowState {
                 });
     
                 render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-                
                 render_pass.set_pipeline(&self.light_render_pipeline);
-                render_pass.draw_light_model(&self.obj_model, &self.camera_bind_group, &self.light_bind_group);
-
+                render_pass.draw_light_model(
+                    &self.obj_model,
+                    &self.camera_bind_group,
+                    &self.light_bind_group,
+                );
                 render_pass.set_pipeline(&self.render_pipeline);
                 render_pass.draw_model_instanced(
                     &self.obj_model,
