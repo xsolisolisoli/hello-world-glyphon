@@ -88,7 +88,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let reflect_dir = reflect(-light_dir, in.world_normal);
     let specular_strength = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0);
     let specular_color = specular_strength * light.color;
-    
     let result = (ambient_color + diffuse_color + specular_color) * object_color.xyz;
     return vec4<f32>(result, object_color.a);
     // return textureSample(t_diffuse, s_diffuse, in.tex_coords);

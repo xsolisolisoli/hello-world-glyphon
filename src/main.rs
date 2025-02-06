@@ -65,6 +65,21 @@ impl winit::application::ApplicationHandler for Application {
         self.window_state = Some(pollster::block_on(WindowState::new(window)));
     }
 
+    fn device_event(
+        &mut self,
+        _event_loop: &winit::event_loop::ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        _event: winit::event::DeviceEvent,
+    ) {
+        match _event {
+            winit::event::DeviceEvent::MouseMotion { delta } => {
+                if let Some(state) = &mut self.window_state {
+                    state.camera_controller.process_mouse(delta.0, delta.1);
+                }
+            }
+            _ => {}
+        }
+    }
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
@@ -110,12 +125,12 @@ impl winit::application::ApplicationHandler for Application {
                     }
                 }
                 WindowEvent::RedrawRequested => {
+                    state.window.request_redraw();
                     let now = Instant::now();
                     let dt = now - last_render_time;
                     last_render_time = now;
                     state.update(dt);
 
-                    state.window.request_redraw();
                     // Update text rendering viewport
                     state.viewport.update(
                         &state.queue,
