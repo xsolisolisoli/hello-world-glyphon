@@ -477,22 +477,16 @@ impl WindowState {
         }
     }
 
+
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        // UPDATED!
         if new_size.width > 0 && new_size.height > 0 {
-            // Update surface configuration
+            self.projection.resize(new_size.width, new_size.height);
             self.surface_config.width = new_size.width;
             self.surface_config.height = new_size.height;
             self.surface.configure(&self.device, &self.surface_config);
-            self.projection.resize(new_size.width, new_size.height);
-            // Recreate depth texture with the new size
-            self.depth_texture.resize(
-                &self.device,
-                self.surface_config.width,
-                self.surface_config.height,
-            );
-    
-            // Update camera aspect ratio
-            // self.camera.aspect = self.surface_config.width as f32 / self.surface_config.height as f32;
+            self.depth_texture =
+                texture::Texture::create_depth_texture(&self.device, &self.surface_config, "depth_texture");
         }
     }
 
