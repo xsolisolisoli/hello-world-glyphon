@@ -1,4 +1,5 @@
 use crate::camera::{self, Camera, CameraUniform};
+use crate::console::Console;
 use crate::{light, model, resources, texture, rendering};
 use crate::vertex::{Instanced, InstanceRaw};
 use crate::model::{DrawLight, DrawModel, Model, ModelVertex, Vertex}; // Ensure this line is present
@@ -93,9 +94,7 @@ pub struct WindowState {
     pub swash_cache: SwashCache,
     pub viewport: Viewport,
     pub atlas: TextAtlas,
-    pub text_renderer: TextRenderer,
-    pub text_buffer: Buffer,
-    pub chat_text: String,
+    pub console: Console,
     pub render_pipeline: wgpu::RenderPipeline,
     // pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
@@ -380,65 +379,29 @@ impl WindowState {
             shader,
         )
     };
-        
-
-         
-        
-            
-
-        // ///Possibly in wrong place ?TODO
-        // queue.write_texture(
-        //     wgpu::ImageCopyTexture {
-        //         texture: &diffuse_texture,
-        //         mip_level: 0,
-        //         origin: wgpu::Origin3d::ZERO,
-        //         aspect: wgpu::TextureAspect::All,
-        //     },
-        //     &diffuse_rgba,
-        //     wgpu::ImageDataLayout {
-        //         offset: 0,
-        //         bytes_per_row: Some(4 * dimensions.0),
-        //         rows_per_image: Some(dimensions.1),
-        //     },
-        //     texture_size,   
-        // );
-        
-         
-        
-                 
 
         let mut font_system = FontSystem::new();
         let swash_cache = SwashCache::new();
         let cache = Cache::new(&device);
         let viewport = Viewport::new(&device, &cache);
         let mut atlas = TextAtlas::new(&device, &queue, &cache, swapchain_format);
-        let text_renderer = TextRenderer::new(
-            &mut atlas, &device, wgpu::MultisampleState::default(),
-            Some(wgpu::DepthStencilState {
-                format: texture::Texture::DEPTH_FORMAT,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Always,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            })
-        );
+        let console = Console::new(&device, &queue, swapchain_format, physical_size.width, physical_size.height);
 
-        // let text_renderer = 
-        // TextRenderer::new(&mut atlas, &device, MultisampleState::default(), None);
-        let mut text_buffer = Buffer::new(&mut font_system, Metrics::new(30.0, 42.0));
+
+        // let mut text_buffer = Buffer::new(&mut font_system, Metrics::new(30.0, 42.0));
 
         let physical_width = (physical_size.width as f64 * scale_factor) as u32;
         let physical_height = (physical_size.height as f64 * scale_factor) as u32;
 
-        text_buffer.set_size(
-            &mut font_system,
-            Some(physical_width as f32),
-            Some(physical_height as f32)
-        );
+        // text_buffer.set_size(
+        //     &mut font_system,
+        //     Some(physical_width as f32),
+        //     Some(physical_height as f32)
+        // );
 
-        let mut chat_text = "Hello world! 👋\nThis is rendered with 🦅 glyphon 🦁\nThe text below should be partially clipped.\na b c d e f g h i j k l m n o p q r s t u v w x y z".to_string();
-        text_buffer.set_text(&mut font_system, &chat_text, Attrs::new().family(Family::SansSerif), Shaping::Advanced); 
-        text_buffer.shape_until_scroll(&mut font_system, false);
+        // let mut chat_text = "Hello world! 👋\nThis is rendered with 🦅 glyphon 🦁\nThe text below should be partially clipped.\na b c d e f g h i j k l m n o p q r s t u v w x y z".to_string();
+        // text_buffer.set_text(&mut font_system, &chat_text, Attrs::new().family(Family::SansSerif), Shaping::Advanced); 
+        // text_buffer.shape_until_scroll(&mut font_system, false);
 
         Self {
             device,
@@ -449,9 +412,7 @@ impl WindowState {
             swash_cache,
             viewport,
             atlas,
-            text_renderer,
-            text_buffer,
-            chat_text,
+            console,
             render_pipeline,
             index_buffer,
             num_indices,
@@ -500,7 +461,11 @@ impl WindowState {
                         ..
                     },
                 ..
-            } => self.camera_controller.process_keyboard(*key, *state),
+            } => {
+                self.camera_controller.process_keyboard(*key, *state);
+                self.console.process_input(*key, *state);   
+                true
+            }
             WindowEvent::MouseWheel { delta, .. } => {
                 self.camera_controller.process_scroll(delta);
                 true
@@ -588,7 +553,7 @@ impl WindowState {
                 &self.camera_bind_group,
                 &self.light_bind_group,
             );
-            &self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
+            &self.console.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
 
         }
         self.queue.submit(iter::once(encoder.finish()));

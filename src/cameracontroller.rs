@@ -39,7 +39,7 @@ impl CameraController {
     }
 
     pub fn process_keyboard(&mut self, key: KeyCode, state: ElementState) -> bool{
-        let amount = if state == ElementState::Pressed { 1.0 } else { 0.0 };
+        let amount = if state == ElementState::Pressed { 100.0 } else { 0.0 };
         match key {
             KeyCode::KeyW | KeyCode::ArrowUp => {
                 self.amount_forward = amount;
