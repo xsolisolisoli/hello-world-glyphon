@@ -456,14 +456,15 @@ impl WindowState {
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
-                        physical_key: PhysicalKey::Code(key),
+                        logical_key: _logKey,
+                        physical_key: _physKey,
                         state,
                         ..
                     },
                 ..
             } => {
+                self.console.process_console(event);   
                 self.camera_controller.process_keyboard(*key, *state);
-                self.console.process_input(*key, *state);   
                 true
             }
             WindowEvent::MouseWheel { delta, .. } => {

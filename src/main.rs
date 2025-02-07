@@ -57,7 +57,7 @@ impl winit::application::ApplicationHandler for Application {
                 .create_window(
                     Window::default_attributes()
                         .with_inner_size(LogicalSize::new(800.0, 600.0))
-                        .with_title("glyphon hello world")
+                        .with_title("Web Integrated Graphics (WIG) v0.1")
                 )
                 .unwrap()
         );

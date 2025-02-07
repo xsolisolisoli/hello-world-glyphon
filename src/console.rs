@@ -1,7 +1,7 @@
 use glyphon::{Attrs, Buffer, Cache, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
 use log::info;
 use wgpu::{Device, Queue, TextureFormat};
-use winit::{event::ElementState, keyboard::KeyCode};
+use winit::{event::{ElementState, KeyEvent}, keyboard::KeyCode};
 
 pub struct Console {
     pub font_system: FontSystem,
@@ -59,36 +59,40 @@ impl Console {
             input_mode
         }
     }
-    pub fn process_input(&mut self, key: KeyCode, state: ElementState) {
-        info!("Processing input: {:?}", key);
-        match key {  
-            KeyCode::Enter => {
-                if state == ElementState::Pressed {
-                    if !self.input_mode {
-                        self.console_newline();
-                    }
-                    else {
+    pub fn process_console(&mut self, event: KeyEvent) {
+        match event.physical_key {  
+        //     KeyCode::Enter => {
+        //         if state == ElementState::Pressed {
+        //             if !self.input_mode {
+        //                 self.console_newline();
+        //             }
+        //             else {
 
-                    }
+        //             }
 
-                    //If input mode off && message not null/whitespace, add new line, then invert input mode
-                    self.input_mode = !self.input_mode;
-                }
-            }
-            
-            _ =>  {
-                if self.input_mode {
-                    match key {
-                        KeyCode::Backspace => {
-                            if state == ElementState::Pressed {
-                                self.chat_text.pop();
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            },
-        }
+        //             //If input mode off && message not null/whitespace, add new line, then invert input mode
+        //             self.input_mode = !self.input_mode;
+        //         }
+        //     }
+        //     KeyCode::Backspace => {
+        //         if state == ElementState::Pressed {
+        //             self.current_line.pop();
+        //             self.update();
+        //         }
+        //     }
+        //     KeyCode::ArrowRight => {
+        //         info!("Scrolling");
+        //         self.scroll();
+        //         self.update();
+        //     }
+        //     _ =>  {
+        //         if self.input_mode {
+        //             match key {
+        //                 _ => {}
+        //             }
+        //         }
+        //     },
+        // }
     }
 
     pub fn render(&mut self, render_pass: &mut wgpu::RenderPass) {
@@ -104,7 +108,18 @@ impl Console {
             Shaping::Advanced,
         );
         self.text_buffer.shape_until_scroll(&mut self.font_system, false);
+    }
+    fn scroll(&mut self) {
+        self.text_buffer.scroll();
+    }
 
+    fn update(&mut self) {
+        self.text_buffer.set_text(
+            &mut self.font_system,
+            &(self.chat_text.clone() + &self.current_line),
+            Attrs::new().family(Family::SansSerif),
+            Shaping::Advanced,
+        );
     }
 }
 
