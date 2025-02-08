@@ -60,7 +60,7 @@ impl Console {
         }
     }
     pub fn process_console(&mut self, event: KeyEvent) {
-        match event.physical_key {  
+        // match event.physical_key {  
         //     KeyCode::Enter => {
         //         if state == ElementState::Pressed {
         //             if !self.input_mode {

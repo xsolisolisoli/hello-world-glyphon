@@ -21,6 +21,7 @@ dependencies = [
  "instant",
  "log",
  "lru",
+ "num-traits",
  "pollster",
  "reqwest",
  "resvg",

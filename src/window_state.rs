@@ -463,8 +463,7 @@ impl WindowState {
                     },
                 ..
             } => {
-                self.console.process_console(event);   
-                self.camera_controller.process_keyboard(*key, *state);
+                // self.camera_controller.process_keyboard(*key, *state);
                 true
             }
             WindowEvent::MouseWheel { delta, .. } => {
