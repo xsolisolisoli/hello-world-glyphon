@@ -57,7 +57,7 @@ impl winit::application::ApplicationHandler for Application {
                 .create_window(
                     Window::default_attributes()
                         .with_inner_size(LogicalSize::new(800.0, 600.0))
-                        .with_title("glyphon hello world")
+                        .with_title("Web Integrated Graphics (WIG) v0.1")
                 )
                 .unwrap()
         );
@@ -91,38 +91,13 @@ impl winit::application::ApplicationHandler for Application {
         let Some(state) = &mut self.window_state else {
             return;
         };
-        // Handle input and updates first
-        // let handled = state.input(&event);
-        // if !handled {
-        //     info!("input event not handled");
-        // }
-        let is_keyboard_event = matches!(event, WindowEvent::KeyboardInput { .. });
-        let handled = state.input(&event);
-
-        if is_keyboard_event && !handled {
-            info!("keyboard event not handled");
-        }
-
-
-            info!("input event not handled");
+        state.input(&event);
             match event {
                 WindowEvent::Resized(physical_size) => {
                     state.resize(physical_size);
                     state.window.request_redraw();
                 }
                 WindowEvent::KeyboardInput { event: KeyEvent { state: ElementState::Pressed, physical_key, .. }, .. } => {
-                    match physical_key {
-                        PhysicalKey::Code(KeyCode::KeyW) => {
-                            console::write_to_console(
-                                &mut state.text_buffer,
-                                &mut state.font_system,
-                                &mut state.chat_text,
-                                "hi",
-                            );
-                            state.window.request_redraw();
-                        }
-                        _ => {}
-                    }
                 }
                 WindowEvent::RedrawRequested => {
                     state.window.request_redraw();
@@ -142,7 +117,7 @@ impl winit::application::ApplicationHandler for Application {
 
                     // Prepare text rendering
                     let text_area = TextArea {
-                        buffer: &state.text_buffer,
+                        buffer: &state.console.text_buffer,
                         left: 10.0,
                         top: 10.0,
                         scale: 1.0,
@@ -156,7 +131,8 @@ impl winit::application::ApplicationHandler for Application {
                         custom_glyphs: &[],
                     };
     
-                    state.text_renderer.prepare(
+                    //Probably not necessary.
+                    state.console.text_renderer.prepare(
                         &state.device,
                         &state.queue,
                         &mut state.font_system,
