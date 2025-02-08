@@ -116,7 +116,7 @@ pub struct WindowState<'a> {
     light_bind_group: wgpu::BindGroup,
     light_render_pipeline: wgpu::RenderPipeline,
     pub obj_model: Model,
-    mouse_pressed: bool,
+    pub mouse_pressed: bool,
     projection: camera::Projection,    
 }
 impl<'a> WindowState<'a> {
