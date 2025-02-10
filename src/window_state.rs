@@ -7,13 +7,19 @@ use cgmath::{InnerSpace, Rotation3, Zero};
 use glyphon::{Attrs, Buffer, Cache, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport};
 use wgpu::util::RenderEncoder;
 use instant::Duration;
-use winit::event::{ElementState, Event, KeyEvent, MouseButton, WindowEvent};
-use winit::keyboard::PhysicalKey;
+use winit::event::MouseButton;
+
 use std::collections::btree_map::Range;
 use std::sync::Arc;
 use std::time::Instant;
 use wgpu::{util::DeviceExt, CommandEncoderDescriptor, CompositeAlphaMode, DeviceDescriptor, Instance, InstanceDescriptor, LoadOp, MultisampleState, Operations, PresentMode, RenderPassColorAttachment, RenderPassDescriptor, RequestAdapterOptions, SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor};
-use winit::window::Window;
+use winit::{
+    dpi::LogicalSize,
+    event::{DeviceEvent, ElementState, Event, KeyEvent, WindowEvent},
+    event_loop::EventLoop,
+    keyboard::{KeyCode, PhysicalKey},
+    window::{Window, WindowBuilder},
+};
 use crate::cameracontroller::CameraController;
 
 use std::iter;
@@ -83,7 +89,7 @@ const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
 );
 
 pub struct WindowState<'a> {
-    pub window: &'a Window,
+    pub window: &'a Arc<Window>,
     pub instances: Vec<Instanced>,
     pub instance_buffer: wgpu::Buffer,
     pub device: wgpu::Device,
@@ -120,7 +126,7 @@ pub struct WindowState<'a> {
     projection: camera::Projection,    
 }
 impl<'a> WindowState<'a> {
-    pub async fn new(window: Arc<Window>) -> Self {
+    pub async fn new(window: &'a Arc<Window>) -> Self {
         let physical_size = window.inner_size();
         let scale_factor = window.scale_factor();
 

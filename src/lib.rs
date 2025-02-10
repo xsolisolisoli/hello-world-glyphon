@@ -1,17 +1,34 @@
-use std::sync::Arc;
+mod texture;
+mod console;
+mod cameracontroller;
+mod vertex;
+mod camera;
 mod window_state;
-use window_state::WindowState;
+use std::{f32::consts::FRAC_PI_2, time::Instant};
+mod model;
+mod rendering;
+mod light;
+mod resources;
+mod common {
+    pub mod utils;
+}
+
+use crate::window_state::WindowState;
+use std::sync::{Arc, Once};
 use winit::{
     dpi::LogicalSize,
     event::{DeviceEvent, ElementState, Event, KeyEvent, WindowEvent},
     event_loop::EventLoop,
     keyboard::{KeyCode, PhysicalKey},
-    window::Window,
+    window::{Window, WindowBuilder},
 };
+use log::info;
+use env_logger::Env;
+use glyphon::{Attrs, Buffer, Color, Family, FontSystem, Metrics, Resolution, Shaping, SwashCache, TextArea, TextBounds};
+use anyhow::*;
+use std::env;
 
-//TODO refactor to host event loop.
-use winit::{dpi::LogicalSize, event_loop::EventLoop, window::{Window, WindowBuilder}};
-
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub async fn run() {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
@@ -21,33 +38,14 @@ pub async fn run() {
             env_logger::init();
         }
     }
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
     let title = "WIG 1.0";
-    let window = Arc::new(
-        WindowBuilder::new()
-            .with_inner_size(LogicalSize::new(800.0, 600.0))
-            .with_title("glyphon hello world")
-            .build(&event_loop)
-            .unwrap()
-    );
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
-    pub async fn run() {
-        cfg_if::cfg_if! {
-            if #[cfg(target_arch = "wasm32")] {
-                std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-                console_log::init_with_level(log::Level::Info).expect("Could't initialize logger");
-            } else {
-                env_logger::init();
-            }
-        }
-    
-        let event_loop = EventLoop::new().unwrap();
-        let title = env!("CARGO_PKG_NAME");
-        let window = WindowBuilder::new()
-            .with_title(title)
-            .build(&event_loop)
-            .unwrap();
-    
+    let window = Arc::new(winit::window::WindowBuilder::new()
+        .with_title(title)
+        .build(&event_loop)
+        .unwrap());
+
+        
         #[cfg(target_arch = "wasm32")]
         {
             // Winit prevents sizing with CSS, so we have to set
@@ -67,8 +65,11 @@ pub async fn run() {
                 .expect("Couldn't append canvas to document body.");
         }
     
-        let mut state = WindowState::new(&window).await; // NEW!
+        let title = env!("CARGO_PKG_NAME");
+    
+        let mut state: WindowState<'_> = WindowState::new(&window).await; // NEW!
         let mut last_render_time = instant::Instant::now();
+        let window = Arc::clone(&window);
         event_loop.run(move |event, control_flow| {
             match event {
                 // NEW!
@@ -82,7 +83,7 @@ pub async fn run() {
                 Event::WindowEvent {
                     ref event,
                     window_id,
-                } if window_id == window().id() && !state.input(event) => {
+                } if window_id == window.id() && !state.input(event) => {
                     match event {
                         #[cfg(not(target_arch="wasm32"))]
                         WindowEvent::CloseRequested
@@ -100,19 +101,20 @@ pub async fn run() {
                         }
                         // UPDATED!
                         WindowEvent::RedrawRequested => {
-                            window().request_redraw();
+                            window.request_redraw();
                             let now = instant::Instant::now();
                             let dt = now - last_render_time;
                             last_render_time = now;
                             state.update(dt);
-                            match state.render() {
-                                Ok(_) => {}
-                                // Reconfigure the surface if it's lost or outdated
-                                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => state.resize(state.size),
-                                // The system is out of memory, we should probably quit
-                                Err(wgpu::SurfaceError::OutOfMemory) => control_flow.exit(),
-                                // We're ignoring timeouts
-                                Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
+                            if let Err(e) = state.render() {
+                                match e {
+                                    // Reconfigure the surface if it's lost or outdated
+                                    wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated => {},
+                                    // The system is out of memory, we should probably quit
+                                    wgpu::SurfaceError::OutOfMemory => control_flow.exit(),
+                                    // We're ignoring timeouts
+                                    wgpu::SurfaceError::Timeout => log::warn!("Surface timeout"),
+                                }
                             }
                         }
                         _ => {}
@@ -122,4 +124,3 @@ pub async fn run() {
             }
         }).unwrap();
     }
-}
