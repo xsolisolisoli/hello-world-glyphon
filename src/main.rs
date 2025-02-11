@@ -9,13 +9,12 @@ mod model;
 mod rendering;
 mod light;
 mod resources;
-
 mod common {
     pub mod utils;
 }
 
 use crate::window_state::WindowState;
-use wgpu_sandbox::run;
+use std::sync::{Arc, Once};
 use winit::{
     dpi::LogicalSize,
     event::{ElementState, KeyEvent, WindowEvent},
@@ -29,10 +28,12 @@ use glyphon::{Attrs, Buffer, Color, Family, FontSystem, Metrics, Resolution, Sha
 use anyhow::*;
 use std::env;
 
-// static INIT: Once = Once::new();
+static INIT: Once = Once::new();
 
 fn main() {
-    pollster::block_on(run());
+    let mut last_render_time = Instant::now();  
+
+    pollster::block_on(wgpu_sandbox::run());
 }
 
 // struct Application {
@@ -45,15 +46,15 @@ fn main() {
 //             return;
 //         }
         
-//         // let window = Arc::new(
-//         //     event_loop
-//         //         .create_window(
-//         //             Window::default_attributes()
-//         //                 .with_inner_size(LogicalSize::new(800.0, 600.0))
-//         //                 .with_title("glyphon hello world")
-//         //         )
-//         //         .unwrap()
-//         // );
+//         let window = Arc::new(
+//             event_loop
+//                 .create_window(
+//                     Window::default_attributes()
+//                         .with_inner_size(LogicalSize::new(800.0, 600.0))
+//                         .with_title("glyphon hello world")
+//                 )
+//                 .unwrap()
+//         );
         
 //         self.window_state = Some(pollster::block_on(WindowState::new(window)));
 //     }
