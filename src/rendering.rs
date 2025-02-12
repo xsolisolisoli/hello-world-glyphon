@@ -1,3 +1,7 @@
+use wgpu::naga::Block;
+
+use texture, wig_geo::{self, block_vertex::VertexDesc};
+
 pub fn create_render_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
@@ -54,3 +58,49 @@ pub fn create_render_pipeline(
         cache: None,
     })
 }
+
+pub fn create_voxel_pipeline(
+    device: &wgpu::Device,
+    texture_format: wgpu::TextureFormat,
+    light_bind_group_layout: &wgpu::BindGroupLayout,
+    camera_bind_group_layout: &wgpu::BindGroupLayout,
+) -> wgpu::RenderPipeline {
+    let visibility = wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT;
+    let camera_bind_group_layout = camera_bind_group_layout;
+    let shader = wgpu::ShaderModuleDescriptor {
+        label: Some("Normal Shader"),
+        source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
+    };
+    let bind_group_layouts = &[camera_bind_group_layout, light_bind_group_layout];
+    let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Render Pipeline Layout"),
+        bind_group_layouts: &[
+            // &texture_bind_group_layout,
+            &camera_bind_group_layout,
+            &light_bind_group_layout,
+        ],
+        push_constant_ranges: &[],
+    });
+    let bind_group_layouts = &[&camera_bind_group_layout, &light_bind_group_layout];
+    let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Render Pipeline Layout"),
+        bind_group_layouts: &[
+            // &texture_bind_group_layout,
+            &camera_bind_group_layout,
+            &light_bind_group_layout,
+        ],
+        push_constant_ranges: &[],
+    });
+    let render_pipeline = create_render_pipeline(
+        &device, 
+        &render_pipeline_layout, 
+        texture_format, 
+        Some(texture::Texture::DEPTH_FORMAT),
+        &[wig_geo::block_vertex::BlockVertex::desc()], 
+        shader,
+        );
+
+    render_pipeline
+}
+
+

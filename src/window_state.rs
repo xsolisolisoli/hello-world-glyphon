@@ -68,6 +68,39 @@ pub struct WindowState<'a> {
     projection: camera::Projection,    
 }
 
+const VERTICES: &[ModelVertex] = &[
+    // Front face
+    ModelVertex { position: [-0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], normal: [0.0, 0.0, 1.0] },
+    ModelVertex { position: [ 0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], normal: [0.0, 0.0, 1.0] },
+    ModelVertex { position: [ 0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], normal: [0.0, 0.0, 1.0] },
+    ModelVertex { position: [-0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], normal: [0.0, 0.0, 1.0] },
+    // Back face
+    ModelVertex { position: [-0.5, -0.5, -0.5], tex_coords: [1.0, 0.0], normal: [0.0, 0.0, -1.0] },
+    ModelVertex { position: [ 0.5, -0.5, -0.5], tex_coords: [0.0, 0.0], normal: [0.0, 0.0, -1.0] },
+    ModelVertex { position: [ 0.5,  0.5, -0.5], tex_coords: [0.0, 1.0], normal: [0.0, 0.0, -1.0] },
+    ModelVertex { position: [-0.5,  0.5, -0.5], tex_coords: [1.0, 1.0], normal: [0.0, 0.0, -1.0] },
+    // Top face
+    ModelVertex { position: [-0.5,  0.5, -0.5], tex_coords: [0.0, 0.0], normal: [0.0, 1.0, 0.0] },
+    ModelVertex { position: [ 0.5,  0.5, -0.5], tex_coords: [1.0, 0.0], normal: [0.0, 1.0, 0.0] },
+    ModelVertex { position: [ 0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], normal: [0.0, 1.0, 0.0] },
+    ModelVertex { position: [-0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], normal: [0.0, 1.0, 0.0] },
+    // Bottom face
+    ModelVertex { position: [-0.5, -0.5, -0.5], tex_coords: [1.0, 1.0], normal: [0.0, -1.0, 0.0] },
+    ModelVertex { position: [ 0.5, -0.5, -0.5], tex_coords: [0.0, 1.0], normal: [0.0, -1.0, 0.0] },
+    ModelVertex { position: [ 0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], normal: [0.0, -1.0, 0.0] },
+    ModelVertex { position: [-0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], normal: [0.0, -1.0, 0.0] },
+    // Right face
+    ModelVertex { position: [ 0.5, -0.5, -0.5], tex_coords: [1.0, 0.0], normal: [1.0, 0.0, 0.0] },
+    ModelVertex { position: [ 0.5,  0.5, -0.5], tex_coords: [1.0, 1.0], normal: [1.0, 0.0, 0.0] },
+    ModelVertex { position: [ 0.5,  0.5,  0.5], tex_coords: [0.0, 1.0], normal: [1.0, 0.0, 0.0] },
+    ModelVertex { position: [ 0.5, -0.5,  0.5], tex_coords: [0.0, 0.0], normal: [1.0, 0.0, 0.0] },
+    // Left face
+    ModelVertex { position: [-0.5, -0.5, -0.5], tex_coords: [0.0, 0.0], normal: [-1.0, 0.0, 0.0] },
+    ModelVertex { position: [-0.5,  0.5, -0.5], tex_coords: [0.0, 1.0], normal: [-1.0, 0.0, 0.0] },
+    ModelVertex { position: [-0.5,  0.5,  0.5], tex_coords: [1.0, 1.0], normal: [-1.0, 0.0, 0.0] },
+    ModelVertex { position: [-0.5, -0.5,  0.5], tex_coords: [1.0, 0.0], normal: [-1.0, 0.0, 0.0] },
+];
+
 impl<'a> WindowState<'a> {
     pub async fn new(window: &'a Arc<Window>) -> Self {
         let physical_size = window.inner_size();
@@ -145,7 +178,7 @@ impl<'a> WindowState<'a> {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        const SPACE_BETWEEN: f32 = 3.0;
+        const SPACE_BETWEEN: f32 = 2.0;
         let instances = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
                 (0..NUM_INSTANCES_PER_ROW).map(move |x| {
@@ -153,14 +186,9 @@ impl<'a> WindowState<'a> {
                     let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
                     let position = cgmath::Vector3 { x, y: 0.0, z };
 
-                    let rotation = if position.is_zero() {
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.0))
-                    } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                    };
-
+                    let rotation = cgmath::Quaternion::from_axis_angle(
+                        cgmath::Vector3::unit_z(),
+                        cgmath::Deg(0.0));
                     Instanced { position, rotation }
                 })
             })
@@ -241,7 +269,7 @@ impl<'a> WindowState<'a> {
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
+            contents: bytemuck::cast_slice(VERTICES),
             usage: wgpu::BufferUsages::INDEX,
         });
         let num_indices = INDICES.len() as u32;
@@ -465,6 +493,7 @@ impl<'a> WindowState<'a> {
             });
 
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.set_pipeline(&self.light_render_pipeline);
             render_pass.draw_light_model(
                 &self.obj_model,
@@ -476,12 +505,8 @@ impl<'a> WindowState<'a> {
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]); // Ensure this line is present
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]); // Ensure this line is present
             render_pass.set_bind_group(2, &self.light_bind_group, &[]); // Ensure this line is present
-            render_pass.draw_model_instanced(
-                &self.obj_model,
-                0..self.instances.len() as u32,
-                &self.camera_bind_group,
-                &self.light_bind_group,
-            );
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as u32); 
+
             &self.text_renderer.render(&self.atlas, &self.viewport, &mut render_pass).unwrap();
         }
         self.queue.submit(iter::once(encoder.finish()));
