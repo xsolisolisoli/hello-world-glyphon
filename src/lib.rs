@@ -12,9 +12,8 @@ mod resources;
 mod common {
     pub mod utils;
 }
-pub mod wig_geo {
-    pub mod block_vertex;
-}
+
+use crate::wig_geo::block_vertex::BlockVertex;
 use crate::window_state::WindowState;
 use std::sync::{Arc, Once};
 use winit::{

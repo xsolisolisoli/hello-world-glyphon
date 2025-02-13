@@ -1,6 +1,8 @@
 use wgpu::naga::Block;
 
-use texture, wig_geo::{self, block_vertex::VertexDesc};
+use crate::wig_geo::block_vertex::{BlockVertex, VertexDesc};
+
+use crate::{texture};
 
 pub fn create_render_pipeline(
     device: &wgpu::Device,
@@ -96,7 +98,7 @@ pub fn create_voxel_pipeline(
         &render_pipeline_layout, 
         texture_format, 
         Some(texture::Texture::DEPTH_FORMAT),
-        &[wig_geo::block_vertex::BlockVertex::desc()], 
+        &[BlockVertex::desc()], 
         shader,
         );
 
