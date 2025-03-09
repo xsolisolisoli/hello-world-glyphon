@@ -1,6 +1,6 @@
 use wgpu::naga::Block;
 
-use crate::wig_geo::block_vertex::{BlockVertex, VertexDesc};
+// use crate::wig_geo::block_vertex::{BlockVertex, VertexDesc};
 
 use crate::{texture};
 
